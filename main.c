@@ -27,6 +27,18 @@ void init_TM4C_hardware(void)
 
     enablePort(PORTF);                              // Initialize clocks on PORT F
     selectPinPushPullOutput(LED_R);                 // Initialise red LED gpio as output
+    selectPinPushPullOutput(LED_G);                 // Initialise green LED gpio as output
+    selectPinPushPullOutput(LED_B);                 // Initialise blue LED gpio as output
+
+    setPinValue(LED_R, 1);
+    setPinValue(LED_G, 1);
+    setPinValue(LED_B, 1);
+
+    waitMicrosecond(20000);
+
+    setPinValue(LED_R, 0);
+    setPinValue(LED_G, 0);
+    setPinValue(LED_B, 0);
 
     initUart0();                                    // Initialise UART0
     setUart0BaudRate(115200, 40e6);                 // Set UART baud rate and clock
@@ -70,30 +82,42 @@ void main(void)
             continue;
         }
 
-        IS_COMMAND("Pkill", 2)              // Update beep tones
+        IS_COMMAND("pkill", 2)              // Invoke function
         {
             char *procName = getFieldString(&shellData, 1);
+            toLower(procName);
             Pkill(procName);
+            continue;
         }
 
         IS_COMMAND("preempt", 2)
         {
             char *preemptionState = getFieldString(&shellData, 1);
-            if (strcmp(toLower(preemptionState), "on")) preempt(true);
-            else                                        preempt(false);
+            preempt(toBool(preemptionState));
+            continue;
         }
 
         IS_COMMAND("sched", 2)
         {
             char *scheduleState = getFieldString(&shellData, 1);
-            if (strcmp(toLower(scheduleState), "prio")) preempt(true);
-            else                                        preempt(false);
+            sched(toBool(scheduleState));
+            continue;
         }
 
         IS_COMMAND("pidof", 2)
         {
             char *procName = getFieldString(&shellData, 1);
             pidof(procName);
+            continue;
         }
+
+        IS_COMMAND("run", 2)
+        {
+            char *procName = getFieldString(&shellData, 1);
+            run(procName);
+            continue;
+        }
+
+        print((void *)"", "Invalid input", CHAR);
     }
 }

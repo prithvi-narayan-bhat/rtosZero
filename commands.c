@@ -7,8 +7,6 @@
 
 #include "strings.h"
 #include "commands.h"
-#include "tm4c123gh6pm.h"
-#include "wait.h"
 #include "gpio.h"
 #include "pinMappings.h"
 
@@ -18,7 +16,7 @@
  **/
 void ps(void)
 {
-    putsUart0("ps() invoked\r\n");
+    print("", "ps() invoked", CHAR);
 }
 
 /**
@@ -27,7 +25,7 @@ void ps(void)
  **/
 void ipcs(void)
 {
-    putsUart0("ipcs() invoked\r\n");
+    print("", "ipcs() invoked", CHAR);
 }
 
 /**
@@ -36,7 +34,7 @@ void ipcs(void)
  **/
 void kill(uint32_t pid)
 {
-    putsUart0("PID killed\r\n");
+    print((void *)&pid, "killed", INT);
 }
 
 /**
@@ -45,7 +43,7 @@ void kill(uint32_t pid)
 **/
 void Pkill(char *procName)
 {
-    putsUart0("procName killed\r\n");
+    print((void *)procName, "Process killed:", CHAR);
 }
 
 /**
@@ -54,7 +52,7 @@ void Pkill(char *procName)
 **/
 void preempt(bool state)
 {
-    putsUart0("preempt() invoked\r\n");
+    print((void *)&state, "Preemption state:", BOOL);
 }
 
 /**
@@ -63,8 +61,7 @@ void preempt(bool state)
 **/
 void sched(bool state)
 {
-    if (state)  putsUart0("sched prio\r\n");
-    else        putsUart0("sched rr\r\n");
+    print((void *)&state, "Priority schedule:", BOOL);
 }
 
 /**
@@ -73,7 +70,8 @@ void sched(bool state)
 **/
 void pidof(char *procName)
 {
-    putsUart0(("pidof() invoked\r\n"));
+    uint32_t val = 10048;
+    print((void *)&val, (const char *)procName, INT);
 }
 
 /**

@@ -34,28 +34,80 @@
                                     ? 1 : 0                                                                 \
                                 )
 
-// Macro to convert input character to lower case
-char _toLower(c)
+/**
+*      @brief Function to print a compound string
+*      @param arg argument of the string
+*      @param s2 message to print with argument
+*      @param argType type of argument
+**/
+void print(void *arg, const char *s, argType_t argType)
 {
-    if (c >= 'A' && c <= 'Z')
+    char str[MAX_STRING_LENGTH];
+
+    if (argType == INT)
     {
-        return c + ('a' - 'A');
+        itoa(*((uint32_t *)arg), str);
+        strcat(str, s);
     }
-    return c;
+
+    if (argType == BOOL)
+    {
+        bool val = *(bool *)arg;
+        strcpy(str, s);
+
+        if (!val)       strcat(str, "OFF");
+        else if (val)   strcat(str, "ON");
+    }
+
+    if (argType == CHAR)
+    {
+        strcpy(str, s);
+        strcat(str, (const char *)arg);
+    }
+    putsUart0(str);
+    putsUart0("\r\n");
+}
+
+/**
+*      @brief Function to copy string to destination
+*      @param s1 destination
+*      @param s2 source
+**/
+void strcpy(char *s1, const char *s2)
+{
+    while (*s2)
+    {
+        *s1++ = *s2++;
+    }
+    *s1 = '\0';
 }
 
 /**
 *      @brief Function to convert a given string to lower case
 *      @param string to be converted
 **/
-char *toLower(char *string)
-{
-    while (*string)
+void toLower(char *s1) {
+    while (*s1)
     {
-        *string = _toLower(*string);
-        string++;
+        if (*s1 >= 'A' && *s1 <= 'Z') *s1 += ('a' - 'A');
+        s1++;
     }
-    return string;
+}
+
+/**
+ *      @brief Function to convert string to boolean value
+ *      @param string to convert to bool
+ *      @return true
+ *      @return false
+ **/
+bool toBool(char *string)
+{
+    toLower(string);
+    if (!strcmp(string, "on"))          return true;
+    else if (!strcmp(string, "off"))    return false;
+    else if (!strcmp(string, "prio"))   return true;
+    else if (!strcmp(string, "rr"))     return false;
+    else                                return false;
 }
 
 /**
@@ -78,7 +130,7 @@ static char *itoa_helper(char *string, int32_t number)
 *      @param number to convert
 *      @return char*
 **/
-char *itoa(char *string, int32_t number)
+char *itoa(int32_t number, char *string)
 {
     char *s = string;
     if (number < 0)  *s++ = '-';
@@ -104,6 +156,24 @@ int strcmp(const char *s1, const char *s2)
     return *(unsigned char *)s1 - *(unsigned char *)s2;
 }
 
+/**
+*      @brief Function to concatenate two strings
+*      @param s1 string 1 and destination for concatenation
+*      @param s2 string 2
+*      @return char* address of concatenated string
+**/
+char *strcat(char *s1, const char *s2)
+{
+    while (*s1)     s1++;               // Find the end of string 1
+
+    *s1++ = ' ';                        // Append a space
+
+    while (*s2)     *s1++ = *s2++;      // Append string 2 to string 1
+
+    *s1 = '\0';                         // Append null
+
+    return s1;                          // Return
+}
 
 /**
 *      @brief Function to get user input over UART
@@ -198,17 +268,19 @@ int32_t getFieldInteger(shellData_t *userData, uint8_t fieldNumber)
 }
 
 /**
-*      @brief Function to determine if the  input string is a command or not
+*      @brief Function to determine if the input string is a command or not (case insensitive)
 *      @param userData Pointer to user data structure
-*      @param command a valid command to compare with
+*      @param cmp a valid command to compare with
 *      @param arg_count number of arguments expected for the command
 *      @return true if valid command
 *      @return false if invalid command
 **/
-bool isCommand(shellData_t *userData, const char *command, uint8_t arg_count)
+bool isCommand(shellData_t *userData, const char *cmp, uint8_t arg_count)
 {
-    bool cmp = strcmp(getFieldString(userData, 0), command);
+    char *cmd = getFieldString(userData, 0);
+    toLower(cmd);
+    bool val = strcmp(cmd, cmp);
 
-    if (userData->count >= arg_count && cmp == 0)   return true;
-    else                                             return false;
+    if (userData->count >= arg_count && val == 0)   return true;
+    else                                            return false;
 }

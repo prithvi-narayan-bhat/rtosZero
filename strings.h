@@ -7,7 +7,7 @@
 #define STRINGS_H
 
 #include "uart0.h"
-#include "inttypes.h"
+#include <inttypes.h>
 
 #define MAX_STRING_LENGTH   80          // Maximum number of characters in input string
 #define MAX_FIELDS          10          // Maximum number of acceptable arguments
@@ -20,17 +20,28 @@ typedef struct
     uint8_t count;
 } shellData_t;
 
+typedef enum
+{
+    INT     = 0,
+    BOOL    = 1,
+    CHAR    = 2,
+} argType_t;
+
 // Function prototypes
 // String functions
-char *itoa(char *string, int32_t number);
-char *toLower(char *string);
+char *itoa(int32_t number, char *string);
+void toLower(char *s1);
+bool toBool(char *string);
 int strcmp(const char *s1, const char *s2);
+char *strcat(char *s1, const char *s2);
+void strcpy(char *s1, const char *s2);
+void print(void *s1, const char *s2, argType_t type);
 
 // Application functions
 void getInputString(shellData_t *shellData);
 void parseInputString(shellData_t *shellData);
 char *getFieldString(shellData_t *shellData, uint8_t fieldNumber);
 int32_t getFieldInteger(shellData_t *shellData, uint8_t fieldNumber);
-bool isCommand(shellData_t *shellData, const char *command, uint8_t argCount);
+bool isCommand(shellData_t *userData, const char *cmp, uint8_t arg_count);
 
 #endif
