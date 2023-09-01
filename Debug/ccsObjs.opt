@@ -1,1 +1,0 @@
-"./clock.obj" "./commands.obj" "./gpio.obj" "./main.obj" "./strings.obj" "./tm4c123gh6pm_startup_ccs.obj" "./uart0.obj" "./wait.obj" "../tm4c123gh6pm.cmd" -llibc.a 
