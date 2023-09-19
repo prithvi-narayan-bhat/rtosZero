@@ -25,6 +25,7 @@ typedef enum
     INT     = 0,
     BOOL    = 1,
     CHAR    = 2,
+    HEX     = 3,
 } argType_t;
 
 // Function prototypes
@@ -36,6 +37,8 @@ int strcmp(const char *s1, const char *s2);
 char *strcat(char *s1, const char *s2);
 void strcpy(char *s1, const char *s2);
 void print(void *s1, const char *s2, argType_t type);
+void hexToAscii(uint32_t hexValue, char *string);
+uint32_t asciiToHex(const char *s);
 
 // Application functions
 void getInputString(shellData_t *shellData);

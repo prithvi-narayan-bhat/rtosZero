@@ -64,6 +64,13 @@ void print(void *arg, const char *s, argType_t argType)
         strcpy(str, s);
         strcat(str, (const char *)arg);
     }
+
+    if (argType == HEX)
+    {
+        hexToAscii(*((uint32_t *)arg), str);
+        strcat(str, s);
+    }
+
     putsUart0(str);
     putsUart0("\r\n");
 }
@@ -138,6 +145,48 @@ char *itoa(int32_t number, char *string)
 
     *itoa_helper(s, number) = '\0';                                                     // Append NULL character to indicate end of string
     return string;
+}
+
+/**
+ *      @brief Function to convert a hex string to ASCII
+ *      @param hexValue hexadecimal Value to convert
+ *      @param string Hex value converted to string
+ **/
+void hexToAscii(uint32_t hexValue, char *string)
+{
+    uint8_t i;
+    for (i = 0; i < 8; i++)
+    {
+        uint8_t nibble = (hexValue >> (28 - 4 * i)) & 0xF;                              // Extract each nibble (4 bits) from the hexValue
+
+        if (nibble <= 9)    *string++ = '0' + nibble;                                   // Convert the nibble to its ASCII representation
+        else                *string++ = 'A' + (nibble - 10);
+    }
+
+    *string = '\0';                                                                     // Null-terminate the ASCII string
+}
+
+/**
+*      @brief Function to convert an ASCII string to a uint32_t hex number
+*      @param s String to convert
+*      @return uint32_t Hex value
+**/
+uint32_t asciiToHex(const char *s)
+{
+    uint32_t hexValue = 0;                                                              // Initialize the hex value to 0
+
+    while (*s)
+    {
+        unsigned char c = *s++;                                                         // Get the next character from the ASCII string
+
+        // Convert the character to a hexadecimal digit and update the hex value
+        if (ASSERT_NUMBER(c))       hexValue = (hexValue << 4) | (c - '0');             // Check if character is a digit
+        else if (c >= 'A' && c <= 'F')  hexValue = (hexValue << 4) | (c - 'A' + 10);    // Check if character belongs to A-F
+        else if (c >= 'a' && c <= 'f')  hexValue = (hexValue << 4) | (c - 'a' + 10);    // Check if character belongs to a-f
+        else                            return 0;                                       // Return 0 to indicate an error
+    }
+
+    return hexValue;                                                                    // Return the computed hex value
 }
 
 /**
