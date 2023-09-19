@@ -55,3 +55,6 @@ Debug/
 .vscode/*
 .launches/*
 
+.ccsproject
+.cproject
+targetConfigs/Tiva TM4C123GH6PM.ccxml
