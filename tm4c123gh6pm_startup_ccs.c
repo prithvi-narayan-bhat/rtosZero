@@ -4,7 +4,7 @@
 //
 // Copyright (c) 2011-2014 Texas Instruments Incorporated.  All rights reserved.
 // Software License Agreement
-// 
+//
 // Software License Agreement
 //
 // Texas Instruments (TI) is supplying this software for use solely and
@@ -31,7 +31,9 @@
 //*****************************************************************************
 void ResetISR(void);
 static void NmiSR(void);
+#if 0
 static void FaultISR(void);
+#endif
 static void IntDefaultHandler(void);
 
 //*****************************************************************************
@@ -55,6 +57,11 @@ extern uint32_t __STACK_TOP;
 //
 //*****************************************************************************
 // To be added by user
+extern void busFaultISR(void);      // To handle bus faults
+extern void usageFaultISR(void);    // To handle usage faults
+extern void mpuFaultISR(void);      // To handle MPU faults
+extern void hardFaultISR(void);     // To handle hard faults
+extern void pendSvISR(void);        // TO handle pendSV faults
 
 //*****************************************************************************
 //
@@ -70,10 +77,10 @@ void (* const g_pfnVectors[])(void) =
                                             // The initial stack pointer
     ResetISR,                               // The reset handler
     NmiSR,                                  // The NMI handler
-    FaultISR,                               // The hard fault handler
-    IntDefaultHandler,                      // The MPU fault handler
-    IntDefaultHandler,                      // The bus fault handler
-    IntDefaultHandler,                      // The usage fault handler
+    hardFaultISR,                           // The hard fault handler
+    mpuFaultISR,                            // The MPU fault handler
+    busFaultISR,                            // The bus fault handler
+    usageFaultISR,                          // The usage fault handler
     0,                                      // Reserved
     0,                                      // Reserved
     0,                                      // Reserved
@@ -81,7 +88,7 @@ void (* const g_pfnVectors[])(void) =
     IntDefaultHandler,                      // SVCall handler
     IntDefaultHandler,                      // Debug monitor handler
     0,                                      // Reserved
-    IntDefaultHandler,                      // The PendSV handler
+    pendSvISR,                              // The PendSV handler
     IntDefaultHandler,                      // The SysTick handler
     IntDefaultHandler,                      // GPIO Port A
     IntDefaultHandler,                      // GPIO Port B
@@ -270,6 +277,7 @@ NmiSR(void)
 // for examination by a debugger.
 //
 //*****************************************************************************
+#if 0
 static void
 FaultISR(void)
 {
@@ -280,6 +288,7 @@ FaultISR(void)
     {
     }
 }
+#endif
 
 //*****************************************************************************
 //
