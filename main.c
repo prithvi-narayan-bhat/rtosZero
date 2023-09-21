@@ -9,16 +9,13 @@
 #include "tm4c123gh6pm.h"
 #include "uart0.h"
 #include "wait.h"
-#include "strings.h"
-#include "commands.h"
+#include "shell.h"
 #include "pinMappings.h"
 #include "nvic.h"
 #include "systemRegisters.h"
 #include "systemInterrups.h"
+#include "strings.h"
 
-#define IS_COMMAND(string, count)       if(isCommand(&shellData, string, count))
-#define RESET                           (NVIC_APINT_R = (NVIC_APINT_VECTKEY | NVIC_APINT_SYSRESETREQ))
-#define ASSERT(value)                   if(value >= 0)
 
 /**
  *      @brief Function to initialize all necessary hardware on the device
@@ -26,6 +23,10 @@
 void initTm4c(void)
 {
     initSystemClockTo40Mhz(); 		                // Initialize system clock
+    initSystemInterrupts();                         // Enable system interrupts
+
+    initUart0();                                    // Initialise UART0
+    setUart0BaudRate(115200, 40e6);                 // Set UART baud rate and clock
 
     enablePort(PORTA);                              // Initialize clocks on PORT A
     enablePort(PORTB);                              // Initialize clocks on PORT B
@@ -63,11 +64,6 @@ void initTm4c(void)
     setPinValue(LED_EG, 1);
     setPinValue(LED_ER, 1);
     setPinValue(LED_EO, 1);
-
-    initUart0();                                    // Initialise UART0
-    setUart0BaudRate(115200, 40e6);                 // Set UART baud rate and clock
-
-    initSystemInterrupts();                         // Enable system interrupts
 }
 
 /**
@@ -82,16 +78,29 @@ void busFaultTrigger(void)
 /**
  *      @brief Function to cause a usage fault
  **/
-// void usageFaultTrigger(void)
-// {
-//     uint32_t tester = 0xFFF;
-//     tester = tester / 0;                            // Trigger a usage fault
-// }
-
 void usageFaultTrigger(void)
 {
-    // Attempt to execute an undefined instruction
-    __asm volatile("MRS, #1");
+    uint8_t div = 0;
+    uint8_t res = 10 / div;                         // Trigger a divide by zero fault
+}
+
+/**
+*      @brief Function to cause a usage fault
+**/
+void pendSVTrigger(void)
+{
+    enablePendSV();                                 // Set PendSV
+}
+
+/**
+*      @brief Functions to 
+**/
+typedef void (*FunctionPointer)(void);              // Define a function pointer type for a function that takes no arguments and returns void
+
+void customFunction()                               // Define a function at the desired address (0x00040000)
+{
+    uint8_t a = 5, b = 10;
+    a = a + b;
 }
 
 /**
@@ -101,84 +110,22 @@ void main(void)
 {
     initTm4c();
 
-
-    shellData_t shellData;
     while (1)
     {
         if(!getPinValue(PUB_E1)) busFaultTrigger();         // Trigger a bus fault
         if(!getPinValue(PUB_E2)) usageFaultTrigger();       // Trigger a usage fault
-        if(!getPinValue(PUB_E3)) setPinValue(LED_EO, 0);
-        if(!getPinValue(PUB_E4)) setPinValue(LED_EY, 0);
+        if(!getPinValue(PUB_E3)) pendSVTrigger();           // Trigger a pendSV fault
+
+        if(!getPinValue(PUB_E4))                            // Trigger a Memory Management Fault
+        {
+            print("", "Here", CHAR);
+            FunctionPointer functionPtr = (FunctionPointer)0x40001000;  // Create a function pointer and assign the address of the customFunction
+            functionPtr();                                              // Call the function through the function pointer
+        }
+
         if(!getPinValue(PUB_E5)) setPinValue(LED_EG, 0);
         if(!getPinValue(PUB_E6)) setPinValue(LED_ER, 0);
 
-        if (kbhitUart0())
-        {
-            getInputString(&shellData);     // Read user input
-            parseInputString(&shellData);       // Parse user input
-
-            IS_COMMAND("ps", 1)                 // Compare and act on user input
-            {
-                ps();                           // Invoke function
-                continue;
-            }
-
-            IS_COMMAND("reboot", 1)
-            {
-                RESET;                          // Reset System
-                continue;
-            }
-
-            IS_COMMAND("ipcs", 1)
-            {
-                ipcs();                         // Invoke function
-                continue;
-            }
-
-            IS_COMMAND("kill", 2)
-            {
-                uint32_t pid = (uint32_t)getFieldInteger(&shellData, 1);
-                kill(pid);                      // Invoke function
-                continue;
-            }
-
-            IS_COMMAND("pkill", 2)              // Invoke function
-            {
-                char *procName = getFieldString(&shellData, 1);
-                toLower(procName);
-                Pkill(procName);
-                continue;
-            }
-
-            IS_COMMAND("preempt", 2)
-            {
-                char *preemptionState = getFieldString(&shellData, 1);
-                preempt(toBool(preemptionState));
-                continue;
-            }
-
-            IS_COMMAND("sched", 2)
-            {
-                char *scheduleState = getFieldString(&shellData, 1);
-                sched(toBool(scheduleState));
-                continue;
-            }
-
-            IS_COMMAND("pidof", 2)
-            {
-                char *procName = getFieldString(&shellData, 1);
-                pidof(procName);
-                continue;
-            }
-
-            IS_COMMAND("run", 2)
-            {
-                char *procName = getFieldString(&shellData, 1);
-                run(procName);
-                continue;
-            }
-
-            print((void *)"", "Invalid input", CHAR);
-        }
+        shell();                                            // Invoke the shell operations
     }
 }
