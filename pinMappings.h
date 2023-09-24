@@ -17,4 +17,6 @@
 #define PUB_E5  PORTB,7     // External push button
 #define PUB_E6  PORTB,2     // External push button
 
+void initTm4c(void);        // Function to enable pins and system clock
+
 #endif
