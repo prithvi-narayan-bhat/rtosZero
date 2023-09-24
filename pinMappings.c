@@ -10,6 +10,7 @@
 #include "clock.h"
 #include "nvic.h"
 #include "uart0.h"
+#include "systemInterrups.h"
 
 /**
  *      @brief Function to initialize all necessary hardware on the device
@@ -17,6 +18,7 @@
 void initTm4c(void)
 {
     initSystemClockTo40Mhz(); 		                // Initialize system clock
+    initSystemInterrupts();                         // Enable system interrupts
 
     initUart0();                                    // Initialise UART0
     setUart0BaudRate(115200, 40e6);                 // Set UART baud rate and clock
