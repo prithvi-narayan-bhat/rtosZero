@@ -13,7 +13,7 @@
 #include "pinMappings.h"
 #include "nvic.h"
 #include "systemRegisters.h"
-#include "systemInterrups.h"
+#include "systemInterrupts.h"
 #include "strings.h"
 
 

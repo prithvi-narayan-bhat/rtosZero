@@ -1,7 +1,7 @@
 #include "strings.h"
 #include "systemRegisters.h"
 #include "tm4c123gh6pm.h"
-#include "systemInterrups.h"
+#include "systemInterrupts.h"
 // Todo Define extern
 uint32_t pid_g = 1034;
 
@@ -45,14 +45,26 @@ void mpuFaultISR(void)
 {
     print((void *)&pid_g, "-> MPU fault", INT);
     uint32_t *msp = getMSP();
-    print((void *)&msp[0], "-> R0", INT);
-    print((void *)&msp[1], "-> R1", INT);
-    print((void *)&msp[2], "-> R2", INT);
-    print((void *)&msp[3], "-> R3", INT);
-    print((void *)&msp[4], "-> R12", INT);
-    print((void *)&msp[5], "-> LR", INT);
-    print((void *)&msp[6], "-> PC", INT);
-    print((void *)&msp[7], "-> XSPR", INT);
+
+    uint32_t mspPtr = getMSP(), flags = getFaultFlags(), faultAddr = getMemFaultAddress();
+
+    // switchToPSP(0x00000002);
+    // psp = getPSP();
+
+    print((void *)&mspPtr, "-> MSP", HEX);
+    print((void *)&flags, "-> Fault Status", HEX);
+    print((void *)&faultAddr, "-> Fault Address", HEX);
+
+    print((void *)&msp[0], "-> R0", HEX);
+    print((void *)&msp[1], "-> R1", HEX);
+    print((void *)&msp[2], "-> R2", HEX);
+    print((void *)&msp[3], "-> R3", HEX);
+    print((void *)&msp[4], "-> R12", HEX);
+    print((void *)&msp[5], "-> LR", HEX);
+    print((void *)&msp[6], "-> PC", HEX);
+    print((void *)&msp[7], "-> XSPR", HEX);
+    clearMemFaults();
+    enablePendSV();
 }
 
 /**
@@ -84,6 +96,10 @@ void hardFaultISR(void)
 void pendSvISR(void)
 {
     print("", "PendSV fault in pid", CHAR);
-    if (getPendSVFlags())    print("", "Called from pendSV", CHAR);
-    clearPendSV();
+    if (getPendSVFlags())
+    {
+        print("", "Called from pendSV", CHAR);
+        clearPendSVFlags();
+        while(1);
+    }
 }

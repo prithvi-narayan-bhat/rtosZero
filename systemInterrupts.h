@@ -13,6 +13,9 @@
 #define clearPendSV()           (NVIC_INT_CTRL_R     |= NVIC_INT_CTRL_UNPEND_SV)    // Set PendSV
 #define getFaultFlags()         (NVIC_HFAULT_STAT_R)                                // Read fault flags
 #define getPendSVFlags()        (NVIC_FAULT_STAT_R & (NVIC_FAULT_STAT_DERR | NVIC_FAULT_STAT_IERR))
+#define clearPendSVFlags()      (NVIC_FAULT_STAT_R   &= ~(NVIC_FAULT_STAT_DERR | NVIC_FAULT_STAT_IERR))
+#define clearMemFaults()        (NVIC_SYS_HND_CTRL_R &= ~(NVIC_SYS_HND_CTRL_MEMP))  // Clear the Mem fault pending bit
+#define getMemFaultAddress()    (NVIC_FAULT_ADDR_R)                                 // Macro to read the address of the fault-causing address
 
 void initSystemInterrupts(void);
 
