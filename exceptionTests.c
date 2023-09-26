@@ -5,8 +5,10 @@
 **/
 
 #include <inttypes.h>
-#include "systemInterrups.h"
+#include "systemInterrupts.h"
 #include "tm4c123gh6pm.h"
+#include "gpio.h"
+#include "wait.h"
 
 /**
 *      @brief Function to cause a bus fault
@@ -42,4 +44,24 @@ void customFunction()                               // Define a function at the 
 {
     uint8_t a = 5, b = 10;
     a = a + b;
+}
+
+/**
+*      @brief Function to toggle a give pin (likely connected to an LED)
+*      @param port of the LED bit
+*      @param pin to the LED is connected
+**/
+void toggleLED(PORT port, uint8_t pin)
+{
+    setPinValue(port, pin, 0);
+    waitMicrosecond(1000000);
+    setPinValue(port, pin, 1);
+    waitMicrosecond(1000000);
+    setPinValue(port, pin, 0);
+    waitMicrosecond(1000000);
+    setPinValue(port, pin, 1);
+    waitMicrosecond(1000000);
+    setPinValue(port, pin, 0);
+    waitMicrosecond(1000000);
+    setPinValue(port, pin, 1);
 }
