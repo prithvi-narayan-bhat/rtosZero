@@ -9,6 +9,8 @@
 #include "shell.h"
 #include "pinMappings.h"
 #include "exceptionTests.h"
+#include "mpu.h"
+#include "systemRegisters.h"
 
 /**
  *      @brief Main, driver function
@@ -29,8 +31,42 @@ void main(void)
             functionPtr();                                              // Call the function through the function pointer
         }
 
-        if(!getPinValue(PUB_E5)) setPinValue(LED_EG, 0);
-        if(!getPinValue(PUB_E6)) setPinValue(LED_ER, 0);
+        if(!getPinValue(PUB_E5))
+        {
+
+            setBackgroundRules();                           // Set Background rules for undefined spaces
+            allowFlashAccess();                             // Set Flash access rules
+            enableMPU();                                    // Enable MPU rules
+
+            toggleLED(LED_B);                               // Toggle LED to indicate working
+
+            disablePrivilegedMode();                        // Disable privileged mode
+
+            toggleLED(LED_R);                               // Toggle LED to indicate working
+
+            enablePrivilegedMode();                         // Enable privileged mode
+
+            toggleLED(LED_G);                               // Toggle LED to indicate working
+
+        }
+
+        if(!getPinValue(PUB_E6))
+        {
+            setBackgroundRules();                           // Set Background rules for undefined spaces
+            allowFlashAccess();                             // Set Flash access rules
+            allowPeripheralAccess();                        // Set Peripheral access rules
+            enableMPU();                                    // Enable MPU
+
+            toggleLED(LED_B);                               // Toggle LED to indicate working
+
+            disablePrivilegedMode();                        // Disable privileged mode
+
+            toggleLED(LED_R);                               // Toggle LED to indicate working
+
+            enablePrivilegedMode();                         // Enable privileged mode
+
+            toggleLED(LED_G);                               // Toggle LED to indicate working
+        }
 
         shell();                                            // Invoke the shell operations
     }

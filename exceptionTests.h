@@ -7,5 +7,6 @@ void busFaultTrigger(void);
 void usageFaultTrigger(void);
 void pendSVTrigger(void);
 void customFunction();
+void toggleLED(PORT port, uint8_t pin);
 
 #endif
