@@ -23,6 +23,7 @@ void shell(void)
         {
             uint32_t pid = (uint32_t)getFieldInteger(&shellData, 1);
             kill(pid);                      // Invoke function
+            return;
         }
 
         IS_COMMAND("pkill", 2)              // Invoke function
@@ -30,32 +31,38 @@ void shell(void)
             char *procName = getFieldString(&shellData, 1);
             toLower(procName);
             Pkill(procName);
+            return;
         }
 
         IS_COMMAND("preempt", 2)
         {
             char *preemptionState = getFieldString(&shellData, 1);
             preempt(toBool(preemptionState));
+            return;
         }
 
         IS_COMMAND("sched", 2)
         {
             char *scheduleState = getFieldString(&shellData, 1);
             sched(toBool(scheduleState));
+            return;
         }
 
         IS_COMMAND("pidof", 2)
         {
             char *procName = getFieldString(&shellData, 1);
             pidof(procName);
+            return;
         }
 
         IS_COMMAND("run", 2)
         {
             char *procName = getFieldString(&shellData, 1);
             run(procName);
+            return;
         }
 
         print((void *)"", "Invalid input", CHAR);
+        return;
     }
 }

@@ -18,6 +18,7 @@
 void main(void)
 {
     initTm4c();
+    initSystemInterrupts();                                 // Enable system interrupts
 
     while (1)
     {
