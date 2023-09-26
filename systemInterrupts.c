@@ -84,7 +84,7 @@ void hardFaultISR(void)
     print((void *)&pid_g, "-> Hard fault", INT);
     print((void *)&psp, "-> PSP", HEX);
     print((void *)&msp, "-> MSP", HEX);
-    print((void *)&flags, "-> Hex Fault Status registers", HEX);
+    print((void *)&flags, "-> Fault Flags", HEX);
 
     while(1);
 }
