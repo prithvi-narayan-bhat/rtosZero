@@ -4,6 +4,7 @@
 void enableMPU(void);
 void setBackgroundRules(void);
 void allowFlashAccess(void);
-void allowPeripheralAccess(void);
+void setupSramAccess(void);
+void setSramAccessWindow(uint32_t *baseAdd, uint32_t size_in_bytes);
 
 #endif
