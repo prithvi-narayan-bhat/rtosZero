@@ -94,7 +94,7 @@ void setupSramAccess(void)
 *      @brief Macro to set repetitive region attributes
 **/
 #ifndef UPDATE_SRAM_MPU_RULES
-#define UPDATE_SRAM_MPU_RULES(regionNumber, address, privilege, size)                   \
+#define UPDATE_SRAM_MPU_RULES(regionNumber, address, privilege, size)                               \
     ({                                                                                              \
         NVIC_MPU_NUMBER_R   = NVIC_MPU_NUMBER_SRAM_##regionNumber;  /* Set SRAM region number */    \
         NVIC_MPU_BASE_R     = address;                              /* SRAM address */              \
@@ -161,8 +161,6 @@ void enableSubRegions(uint32_t baseAdd, uint32_t regionAdd, uint32_t size_in_byt
 **/
 void setSramAccessWindow(uint32_t *baseAdd, uint32_t size_in_bytes)
 {
-    uint8_t subRegionStart;
-    uint8_t subRegionCount;
     // Determine the region within SRAM
     if ((uint32_t)baseAdd < 0x20001FFF)                                         // Region 1 => 4K
     {
