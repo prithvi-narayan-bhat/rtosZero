@@ -11,6 +11,7 @@
 #include "exceptionTests.h"
 #include "mpu.h"
 #include "systemRegisters.h"
+#include "systemInterrupts.h"
 
 /**
  *      @brief Main, driver function
@@ -19,6 +20,24 @@ void main(void)
 {
     initTm4c();
     initSystemInterrupts();                                 // Enable system interrupts
+
+#if TEST_BACKGROUND_RULES
+    setBackgroundRules();                                   // Set Background rules for undefined spaces
+    allowFlashAccess();                                     // Set Flash access rules
+    enableMPU();                                            // Enable MPU rules
+    toggleLED(LED_B);                                       // Toggle LED to indicate working
+    disablePrivilegedMode();                                // Disable privileged mode
+    toggleLED(LED_R);                                       // Toggle LED to indicate working
+    enablePrivilegedMode();                                 // Enable privileged mode
+    toggleLED(LED_G);                                       // Toggle LED to indicate working
+#endif
+
+#if TEST_SRAM_ACCESS
+    setBackgroundRules();                                   // Set Background rules for undefined spaces
+    allowFlashAccess();                                     // Set Flash access rules
+    setupSramAccess();                                      // Set SRAM access rules
+    setSramAccessWindow((uint32_t *)0x20001200, 1024);      // Set a window to allow the RAM access
+#endif
 
     while (1)
     {
@@ -33,42 +52,7 @@ void main(void)
         }
 
         if(!getPinValue(PUB_E5))
-        {
-
-            setBackgroundRules();                           // Set Background rules for undefined spaces
-            allowFlashAccess();                             // Set Flash access rules
-            enableMPU();                                    // Enable MPU rules
-
-            toggleLED(LED_B);                               // Toggle LED to indicate working
-
-            disablePrivilegedMode();                        // Disable privileged mode
-
-            toggleLED(LED_R);                               // Toggle LED to indicate working
-
-            enablePrivilegedMode();                         // Enable privileged mode
-
-            toggleLED(LED_G);                               // Toggle LED to indicate working
-
-        }
-
         if(!getPinValue(PUB_E6))
-        {
-            setBackgroundRules();                           // Set Background rules for undefined spaces
-            allowFlashAccess();                             // Set Flash access rules
-            allowPeripheralAccess();                        // Set Peripheral access rules
-            enableMPU();                                    // Enable MPU
-
-            toggleLED(LED_B);                               // Toggle LED to indicate working
-
-            disablePrivilegedMode();                        // Disable privileged mode
-
-            toggleLED(LED_R);                               // Toggle LED to indicate working
-
-            enablePrivilegedMode();                         // Enable privileged mode
-
-            toggleLED(LED_G);                               // Toggle LED to indicate working
-        }
-
         shell();                                            // Invoke the shell operations
     }
 }
