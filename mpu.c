@@ -4,9 +4,7 @@
 *      @brief Functions handling memory management in rtosZero
 **/
 
-#define BLOCK_SIZE_1    512
-#define BLOCK_SIZE_2    1024
-#define BLOCK_SIZE_3    1536
+#include "memory.h"
 
 /**
 *       Memory Map
@@ -108,12 +106,12 @@ void setupSramAccess(void)
         NVIC_MPU_ATTR_R     |= NVIC_MPU_ATTR_ENABLE;                /* Enable region */             \
     })
 
-    UPDATE_SRAM_MPU_RULES(OS, 0x20000000, AP_K, 4K);        // SRAM base   0 => 4K starting from 0x20000000
-    UPDATE_SRAM_MPU_RULES(4K1, 0x20001000, AP_K, 4K);       // SRAM Region 1 => 4K starting from 0x20001000
-    UPDATE_SRAM_MPU_RULES(8K1, 0x20002000, AP_K, 8K);       // SRAM Region 2 => 8K starting from 0x20002000
-    UPDATE_SRAM_MPU_RULES(4K2, 0x20004000, AP_K, 4K);       // SRAM Region 3 => 4K starting from 0x20004000
-    UPDATE_SRAM_MPU_RULES(4K3, 0x20005000, AP_K, 4K);       // SRAM Region 4 => 4K starting from 0x20005000
-    UPDATE_SRAM_MPU_RULES(8K2, 0x20006000, AP_K, 8K);       // SRAM Region 5 => 8K starting from 0x20006000
+    UPDATE_SRAM_MPU_RULES(OS, REGION_4K0_BASE_ADDR, AP_K, 4K);  // SRAM base   0 => 4K starting from 0x20000000
+    UPDATE_SRAM_MPU_RULES(4K1, REGION_4K1_BASE_ADDR, AP_K, 4K); // SRAM Region 1 => 4K starting from 0x20001000
+    UPDATE_SRAM_MPU_RULES(8K1, REGION_8K1_BASE_ADDR, AP_K, 8K); // SRAM Region 2 => 8K starting from 0x20002000
+    UPDATE_SRAM_MPU_RULES(4K2, REGION_4K2_BASE_ADDR, AP_K, 4K); // SRAM Region 3 => 4K starting from 0x20004000
+    UPDATE_SRAM_MPU_RULES(4K3, REGION_4K3_BASE_ADDR, AP_K, 4K); // SRAM Region 4 => 4K starting from 0x20005000
+    UPDATE_SRAM_MPU_RULES(8K2, REGION_8K2_BASE_ADDR, AP_K, 8K); // SRAM Region 5 => 8K starting from 0x20006000
 
 #undef UPDATE_SRAM_MPU_RULES
 #endif
@@ -162,32 +160,32 @@ void enableSubRegions(uint32_t baseAdd, uint32_t regionAdd, uint32_t size_in_byt
 void setSramAccessWindow(uint32_t *baseAdd, uint32_t size_in_bytes)
 {
     // Determine the region within SRAM
-    if ((uint32_t)baseAdd < 0x20001FFF)                                         // Region 1 => 4K
+    if ((uint32_t)baseAdd < REGION_4K1_TOP_ADDR)                                // Region 1 => 4K
     {
-        enableSubRegions((uint32_t)baseAdd, 0x20001000, size_in_bytes, BLOCK_SIZE_1, NVIC_MPU_NUMBER_SRAM_4K1);
+        enableSubRegions((uint32_t)baseAdd, REGION_4K1_BASE_ADDR, size_in_bytes, BLOCK_SIZE_1, NVIC_MPU_NUMBER_SRAM_4K1);
         return;
     }
 
-    else if ((uint32_t)baseAdd < 0x20003FFF)                                    // Region 2 => 8K
+    else if ((uint32_t)baseAdd < REGION_8K1_TOP_ADDR)                           // Region 2 => 8K
     {
-        enableSubRegions((uint32_t)baseAdd, 0x20002000, size_in_bytes, BLOCK_SIZE_2, NVIC_MPU_NUMBER_SRAM_8K1);
+        enableSubRegions((uint32_t)baseAdd, REGION_8K1_BASE_ADDR, size_in_bytes, BLOCK_SIZE_2, NVIC_MPU_NUMBER_SRAM_8K1);
         return;
     }
 
-    else if ((uint32_t)baseAdd < 0x20004FFF)                                    // Region 3 => 4K
+    else if ((uint32_t)baseAdd < REGION_4K2_TOP_ADDR)                           // Region 3 => 4K
     {
-        enableSubRegions((uint32_t)baseAdd, 0x20004000, size_in_bytes, BLOCK_SIZE_1, NVIC_MPU_NUMBER_SRAM_4K2);
+        enableSubRegions((uint32_t)baseAdd, REGION_4K2_BASE_ADDR, size_in_bytes, BLOCK_SIZE_1, NVIC_MPU_NUMBER_SRAM_4K2);
         return;
     }
 
-    else if ((uint32_t)baseAdd < 0x20005FFF)                                    // Region 4 => 4K
+    else if ((uint32_t)baseAdd < REGION_4K3_TOP_ADDR)                           // Region 4 => 4K
     {
-        enableSubRegions((uint32_t)baseAdd, 0x20005000, size_in_bytes, BLOCK_SIZE_1, NVIC_MPU_NUMBER_SRAM_4K3);
+        enableSubRegions((uint32_t)baseAdd, REGION_4K3_BASE_ADDR, size_in_bytes, BLOCK_SIZE_1, NVIC_MPU_NUMBER_SRAM_4K3);
         return;
     }
 
-    else if ((uint32_t)baseAdd < 0x20007FFF)                                         // Region 5 => 8K
+    else if ((uint32_t)baseAdd < REGION_8K2_TOP_ADDR)                           // Region 5 => 8K
     {
-        enableSubRegions((uint32_t)baseAdd, 0x20006000, size_in_bytes, BLOCK_SIZE_2, NVIC_MPU_NUMBER_SRAM_8K2);
+        enableSubRegions((uint32_t)baseAdd, REGION_8K2_BASE_ADDR, size_in_bytes, BLOCK_SIZE_2, NVIC_MPU_NUMBER_SRAM_8K2);
     }
 }
