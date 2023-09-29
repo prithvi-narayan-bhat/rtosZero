@@ -101,13 +101,13 @@ void *malloc_from_heap(int32_t size)
     // If request is for one of three 1.5K intersections
     if (size == BLOCK_SIZE_3)
     {
-        retVal = getAllocation(allotment_s, heapMetadata_s, size, (2), (BLOCK_4K1_END), (BLOCK_8K1_START), REGION_4K1_BASE_ADDR, 0, BLOCK_SIZE_1);
+        retVal = getAllocation(allotment_s, heapMetadata_s, size, (2), (BLOCK_4K1_END), (BLOCK_8K1_START), REGION_4K1_BASE_ADDR, 1, BLOCK_SIZE_1);
         if (retVal != NULL) return (void *)retVal;
 
         retVal = getAllocation(allotment_s, heapMetadata_s, size, (2), (BLOCK_8K1_END), (BLOCK_4K2_START), REGION_8K1_BASE_ADDR, -7, BLOCK_SIZE_2);
         if (retVal != NULL) return (void *)retVal;
 
-        retVal = getAllocation(allotment_s, heapMetadata_s, size, (2), (BLOCK_4K3_END), (BLOCK_8K2_START), REGION_4K3_BASE_ADDR, -22, BLOCK_SIZE_1);
+        retVal = getAllocation(allotment_s, heapMetadata_s, size, (2), (BLOCK_4K3_END), (BLOCK_8K2_START), REGION_4K3_BASE_ADDR, -23, BLOCK_SIZE_1);
         if (retVal != NULL) return (void *)retVal;
     }
 
