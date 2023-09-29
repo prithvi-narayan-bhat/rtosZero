@@ -12,6 +12,10 @@
 #include "mpu.h"
 #include "systemRegisters.h"
 #include "systemInterrupts.h"
+#include "memory.h"
+#include "strings.h"
+
+#define TEST_MALLOC 1
 
 /**
  *      @brief Main, driver function
@@ -20,6 +24,31 @@ void main(void)
 {
     initTm4c();
     initSystemInterrupts();                                 // Enable system interrupts
+
+#if TEST_MALLOC
+    uint32_t *ptr = (uint32_t *)malloc_from_heap(2048);
+    uint32_t *ptr2 = (uint32_t *)malloc_from_heap(1024);
+    uint32_t *ptr3 = (uint32_t *)malloc_from_heap(4096);
+    uint32_t *ptr4 = (uint32_t *)malloc_from_heap(3072);
+    uint32_t *ptr5 = (uint32_t *)malloc_from_heap(512);
+    uint32_t *ptr6 = (uint32_t *)malloc_from_heap(512);
+    uint32_t *ptr7 = (uint32_t *)malloc_from_heap(1536);
+
+    if (ptr != NULL)
+    {
+        print((void *)&ptr, "->Address", HEX);
+        print((void *)&ptr2, "->Address", HEX);
+        print((void *)&ptr3, "->Address", HEX);
+        print((void *)&ptr4, "->Address", HEX);
+        print((void *)&ptr5, "->Address", HEX);
+        print((void *)&ptr6, "->Address", HEX);
+        print((void *)&ptr7, "->Address", HEX);
+    }
+    else
+    {
+        print("", "Memory allocation failed", CHAR);
+    }
+#endif
 
 #if TEST_BACKGROUND_RULES
     setBackgroundRules();                                   // Set Background rules for undefined spaces
