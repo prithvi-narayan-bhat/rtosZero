@@ -26,5 +26,6 @@
 
 
 void *malloc_from_heap(int size_in_bytes);
+void free(void *baseAdd);
 
 #endif
