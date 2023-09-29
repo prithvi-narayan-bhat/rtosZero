@@ -145,7 +145,7 @@ uint32_t getMask(uint8_t subRegionCount, uint8_t subRegionStart)
 void enableSubRegions(uint32_t baseAdd, uint32_t regionAdd, uint32_t size_in_bytes, uint16_t minBlockSize, uint8_t sramRegion)
 {
     uint8_t subRegionStart = ((uint32_t)baseAdd - regionAdd) / minBlockSize;    // Determine start of the subregions to enable
-    uint8_t subRegionCount = size_in_bytes / BLOCK_SIZE_1;                      // Get the number of subregions to enable
+    uint8_t subRegionCount = size_in_bytes / minBlockSize;                      // Get the number of subregions to enable
 
     NVIC_MPU_NUMBER_R   = sramRegion;                                           // Set SRAM region number
     NVIC_MPU_ATTR_R     |= NVIC_MPU_ATTR_AP_F;                                  // Privileged access
@@ -159,8 +159,30 @@ void enableSubRegions(uint32_t baseAdd, uint32_t regionAdd, uint32_t size_in_byt
 **/
 void setSramAccessWindow(uint32_t *baseAdd, uint32_t size_in_bytes)
 {
+    // First 1.5K region
+    if (baseAdd == 0x20001E00)
+    {
+        enableSubRegions((uint32_t)0x20001E00, REGION_4K1_BASE_ADDR, 512, BLOCK_SIZE_1, NVIC_MPU_NUMBER_SRAM_4K1);
+        enableSubRegions((uint32_t)0x20002000, REGION_8K1_BASE_ADDR, 1024, BLOCK_SIZE_2, NVIC_MPU_NUMBER_SRAM_8K1);
+        return;
+    }
+
+    else if (baseAdd == 0x20003C00)
+    {
+        enableSubRegions((uint32_t)0x20003C00, REGION_8K1_BASE_ADDR, 1024, BLOCK_SIZE_2, NVIC_MPU_NUMBER_SRAM_8K1);
+        enableSubRegions((uint32_t)0x20004000, REGION_4K2_BASE_ADDR, 512, BLOCK_SIZE_1, NVIC_MPU_NUMBER_SRAM_4K2);
+        return;
+    }
+
+    else if (baseAdd == 0x20005E00)
+    {
+        enableSubRegions((uint32_t)0x20005E00, REGION_4K3_BASE_ADDR, 512, BLOCK_SIZE_1, NVIC_MPU_NUMBER_SRAM_4K3);
+        enableSubRegions((uint32_t)0x20006000, REGION_8K2_BASE_ADDR, 1024, BLOCK_SIZE_2, NVIC_MPU_NUMBER_SRAM_8K2);
+        return;
+    }
+
     // Determine the region within SRAM
-    if ((uint32_t)baseAdd < REGION_4K1_TOP_ADDR)                                // Region 1 => 4K
+    else if ((uint32_t)baseAdd < REGION_4K1_TOP_ADDR)                           // Region 1 => 4K
     {
         enableSubRegions((uint32_t)baseAdd, REGION_4K1_BASE_ADDR, size_in_bytes, BLOCK_SIZE_1, NVIC_MPU_NUMBER_SRAM_4K1);
         return;
