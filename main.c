@@ -24,9 +24,9 @@ void main(void)
     initSystemInterrupts();                                 // Enable system interrupts
 
     uint32_t *ptr = (uint32_t *)malloc_from_heap(2048);
-    // uint32_t *ptr2 = (uint32_t *)malloc_from_heap(1024);
-    // uint32_t *ptr3 = (uint32_t *)malloc_from_heap(4096);
-    // uint32_t *ptr4 = (uint32_t *)malloc_from_heap(3072);
+    uint32_t *ptr2 = (uint32_t *)malloc_from_heap(1024);
+    uint32_t *ptr3 = (uint32_t *)malloc_from_heap(4096);
+    uint32_t *ptr4 = (uint32_t *)malloc_from_heap(3072);
     uint32_t *ptr5 = (uint32_t *)malloc_from_heap(1536);
     uint32_t *ptr6 = (uint32_t *)malloc_from_heap(1536);
     uint32_t *ptr7 = (uint32_t *)malloc_from_heap(1536);
@@ -34,9 +34,9 @@ void main(void)
     if (ptr7 != NULL)
     {
         print((void *)&ptr, "->Address", HEX);
-        // print((void *)&ptr2, "->Address", HEX);void free(void *baseAdd)
-        // print((void *)&ptr3, "->Address", HEX);
-        // print((void *)&ptr4, "->Address", HEX);
+        print((void *)&ptr2, "->Address", HEX);
+        print((void *)&ptr3, "->Address", HEX);
+        print((void *)&ptr4, "->Address", HEX);
         print((void *)&ptr5, "->Address", HEX);
         print((void *)&ptr6, "->Address", HEX);
         print((void *)&ptr7, "->Address", HEX);
