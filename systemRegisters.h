@@ -9,5 +9,6 @@ extern uint32_t getMSP(void);                       // Function to read and retu
 extern uint32_t getFaultFlags(uint32_t *regAddr);   // Function to read the fault flags
 extern uint32_t disablePrivilegedMode(void);        // Function to disable Privileged execution mode
 extern uint32_t enablePrivilegedMode(void);         // Function to enable Privileged execution mode
+void loadPSP(uint32_t stackAddr);                   // Function to load a value to the stack pointer
 
 #endif
