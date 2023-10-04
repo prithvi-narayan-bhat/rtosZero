@@ -92,7 +92,7 @@ void setupSramAccess(void)
 *      @brief Macro to set repetitive region attributes
 **/
 #ifndef UPDATE_SRAM_MPU_RULES
-#define UPDATE_SRAM_MPU_RULES(regionNumber, address, privilege, size)                               \
+#define UPDATE_SRAM_MPU_RULES(regionNumber, address, privilege, srd, size)                          \
     ({                                                                                              \
         NVIC_MPU_NUMBER_R   = NVIC_MPU_NUMBER_SRAM_##regionNumber;  /* Set SRAM region number */    \
         NVIC_MPU_BASE_R     = address;                              /* SRAM address */              \
@@ -101,17 +101,17 @@ void setupSramAccess(void)
         NVIC_MPU_ATTR_R     |= NVIC_MPU_ATTR_TEX_N;                 /* Normal Type Extension */     \
         NVIC_MPU_ATTR_R     |= NVIC_MPU_ATTR_SHAREABLE;             /* Shareable */                 \
         NVIC_MPU_ATTR_R     |= NVIC_MPU_ATTR_CACHEABLE;             /* Cacheable */                 \
-        NVIC_MPU_ATTR_R     |= NVIC_MPU_ATTR_SRD_M;                 /* Disable sub-regions */       \
+        NVIC_MPU_ATTR_R     |= srd;                                 /* Disable sub-regions */       \
         NVIC_MPU_ATTR_R     |= NVIC_MPU_ATTR_SIZE_SRAM_##size;      /* Apply rules  */              \
         NVIC_MPU_ATTR_R     |= NVIC_MPU_ATTR_ENABLE;                /* Enable region */             \
     })
 
-    UPDATE_SRAM_MPU_RULES(OS, REGION_4K0_BASE_ADDR, AP_K, 4K);  // SRAM base   0 => 4K starting from 0x20000000
-    UPDATE_SRAM_MPU_RULES(4K1, REGION_4K1_BASE_ADDR, AP_K, 4K); // SRAM Region 1 => 4K starting from 0x20001000
-    UPDATE_SRAM_MPU_RULES(8K1, REGION_8K1_BASE_ADDR, AP_K, 8K); // SRAM Region 2 => 8K starting from 0x20002000
-    UPDATE_SRAM_MPU_RULES(4K2, REGION_4K2_BASE_ADDR, AP_K, 4K); // SRAM Region 3 => 4K starting from 0x20004000
-    UPDATE_SRAM_MPU_RULES(4K3, REGION_4K3_BASE_ADDR, AP_K, 4K); // SRAM Region 4 => 4K starting from 0x20005000
-    UPDATE_SRAM_MPU_RULES(8K2, REGION_8K2_BASE_ADDR, AP_K, 8K); // SRAM Region 5 => 8K starting from 0x20006000
+    UPDATE_SRAM_MPU_RULES(OS, REGION_4K0_BASE_ADDR, AP_K, 0, 4K);                       // SRAM base   0 => 4K starting from 0x20000000
+    UPDATE_SRAM_MPU_RULES(4K1, REGION_4K1_BASE_ADDR, AP_F, NVIC_MPU_ATTR_SRD_M, 4K);    // SRAM Region 1 => 4K starting from 0x20001000
+    UPDATE_SRAM_MPU_RULES(8K1, REGION_8K1_BASE_ADDR, AP_F, NVIC_MPU_ATTR_SRD_M, 8K);    // SRAM Region 2 => 8K starting from 0x20002000
+    UPDATE_SRAM_MPU_RULES(4K2, REGION_4K2_BASE_ADDR, AP_F, NVIC_MPU_ATTR_SRD_M, 4K);    // SRAM Region 3 => 4K starting from 0x20004000
+    UPDATE_SRAM_MPU_RULES(4K3, REGION_4K3_BASE_ADDR, AP_F, NVIC_MPU_ATTR_SRD_M, 4K);    // SRAM Region 4 => 4K starting from 0x20005000
+    UPDATE_SRAM_MPU_RULES(8K2, REGION_8K2_BASE_ADDR, AP_F, NVIC_MPU_ATTR_SRD_M, 8K);    // SRAM Region 5 => 8K starting from 0x20006000
 
 #undef UPDATE_SRAM_MPU_RULES
 #endif
