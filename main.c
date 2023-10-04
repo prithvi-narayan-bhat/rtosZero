@@ -23,46 +23,12 @@ void main(void)
     initTm4c();
     initSystemInterrupts();                                 // Enable system interrupts
 
-    uint32_t *ptr = (uint32_t *)malloc_from_heap(2048);
-    uint32_t *ptr2 = (uint32_t *)malloc_from_heap(1024);
-    uint32_t *ptr3 = (uint32_t *)malloc_from_heap(4096);
-    uint32_t *ptr4 = (uint32_t *)malloc_from_heap(3072);
-    uint32_t *ptr5 = (uint32_t *)malloc_from_heap(1536);
-    uint32_t *ptr6 = (uint32_t *)malloc_from_heap(1536);
-    uint32_t *ptr7 = (uint32_t *)malloc_from_heap(1536);
-
-    if (ptr7 != NULL)
-    {
-        print((void *)&ptr, "->Address", HEX);
-        print((void *)&ptr2, "->Address", HEX);
-        print((void *)&ptr3, "->Address", HEX);
-        print((void *)&ptr4, "->Address", HEX);
-        print((void *)&ptr5, "->Address", HEX);
-        print((void *)&ptr6, "->Address", HEX);
-        print((void *)&ptr7, "->Address", HEX);
-    }
-    else
-    {
-        print("", "Memory allocation failed", CHAR);
-    }
-
-    free((void *)ptr);
-
-#if TEST_BACKGROUND_RULES
-    setBackgroundRules();                                   // Set Background rules for undefined spaces
-    allowFlashAccess();                                     // Set Flash access rules
-    enableMPU();                                            // Enable MPU rules
-    toggleLED(LED_B);                                       // Toggle LED to indicate working
-    disablePrivilegedMode();                                // Disable privileged mode
-    toggleLED(LED_R);                                       // Toggle LED to indicate working
-    enablePrivilegedMode();                                 // Enable privileged mode
-    toggleLED(LED_G);                                       // Toggle LED to indicate working
-#endif
-
     setBackgroundRules();                                   // Set Background rules for undefined spaces
     allowFlashAccess();                                     // Set Flash access rules
     setupSramAccess();                                      // Set SRAM access rules
-    setSramAccessWindow((uint32_t *)ptr5, 1536);            // Set a window to allow the RAM access
+    enableMPU();                                            // Enable MPU rules
+
+    // loadPSP((uint32_t)(ptr + (0x800/4)));                   // Load a value to the stack pointer
 
     while (1)
     {
@@ -76,8 +42,8 @@ void main(void)
             functionPtr();                                              // Call the function through the function pointer
         }
 
-        if(!getPinValue(PUB_E5))
-        if(!getPinValue(PUB_E6))
+        // if(!getPinValue(PUB_E5))
+        // if(!getPinValue(PUB_E6))
         shell();                                            // Invoke the shell operations
     }
 }

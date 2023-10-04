@@ -65,4 +65,6 @@ void shell(void)
         print((void *)"", "Invalid input", CHAR);
         return;
     }
+    else
+        return;
 }
