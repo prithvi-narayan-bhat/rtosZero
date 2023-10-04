@@ -24,6 +24,7 @@ void busFaultISR(void)
 {
     print((void *)&pid_g, "-> Bus fault", INT);
     clearBusFault();
+    while(1);
 }
 
 /**
@@ -44,25 +45,25 @@ void usageFaultISR(void)
 void mpuFaultISR(void)
 {
     print((void *)&pid_g, "-> MPU fault", INT);
-    uint32_t *msp = getMSP();
+    uint32_t *psp;
 
-    uint32_t mspPtr = getMSP(), flags = getFaultFlags(), faultAddr = getMemFaultAddress();
+    uint32_t flags = getFaultFlags(), faultAddr = getMemFaultAddress();
 
-    // switchToPSP(0x00000002);
-    // psp = getPSP();
+    psp = (uint32_t *)getPSP();
 
-    print((void *)&mspPtr, "-> MSP", HEX);
+    print((void *)&psp, "-> PSP", HEX);
     print((void *)&flags, "-> Fault Status", HEX);
     print((void *)&faultAddr, "-> Fault Address", HEX);
 
-    print((void *)&msp[0], "-> R0", HEX);
-    print((void *)&msp[1], "-> R1", HEX);
-    print((void *)&msp[2], "-> R2", HEX);
-    print((void *)&msp[3], "-> R3", HEX);
-    print((void *)&msp[4], "-> R12", HEX);
-    print((void *)&msp[5], "-> LR", HEX);
-    print((void *)&msp[6], "-> PC", HEX);
-    print((void *)&msp[7], "-> XSPR", HEX);
+    print((void *)&psp[0], "-> R0", HEX);
+    print((void *)&psp[1], "-> R1", HEX);
+    print((void *)&psp[2], "-> R2", HEX);
+    print((void *)&psp[3], "-> R3", HEX);
+    print((void *)&psp[4], "-> R12", HEX);
+    print((void *)&psp[5], "-> LR", HEX);
+    print((void *)&psp[6], "-> PC", HEX);
+    print((void *)&psp[7], "-> XSPR", HEX);
+
     clearMemFaults();
     enablePendSV();
 }
@@ -73,11 +74,11 @@ void mpuFaultISR(void)
  **/
 void hardFaultISR(void)
 {
-    uint32_t psp = 0, msp = 0, flags = 0;
-    msp = getMSP();
-    flags = getFaultFlags();
-    // switchToPSP(0x00000002);
-    psp = getPSP();
+    uint32_t msp = getMSP();
+    uint32_t flags = getFaultFlags();
+    uint32_t psp = getPSP();
+
+    loadPSP(psp);
 
     clearHardFaults();
 
@@ -95,7 +96,7 @@ void hardFaultISR(void)
  **/
 void pendSvISR(void)
 {
-    print("", "PendSV fault in pid", CHAR);
+    print("", "PendSV fault", CHAR);
     if (getPendSVFlags())
     {
         print("", "Called from pendSV", CHAR);
