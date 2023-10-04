@@ -12644,7 +12644,7 @@
 //*****************************************************************************
 #define NVIC_MPU_ATTR_XN        0x10000000  // Instruction Access Disable
 #define NVIC_MPU_ATTR_AP_M      0x07000000  // Access Privilege
-#define NVIC_MPU_ATTR_AP_K      0x04000000  // Kernel Full Access       (User added)
+#define NVIC_MPU_ATTR_AP_K      0x01000000  // Kernel Full Access       (User added)
 #define NVIC_MPU_ATTR_AP_F      0x03000000  // Access Privilege Full    (User added)
 #define NVIC_MPU_ATTR_TEX_M     0x00380000  // Type Extension Mask
 #define NVIC_MPU_ATTR_TEX_N     0x00000000  // Type Extension Mask      (User added)
