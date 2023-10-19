@@ -77,14 +77,16 @@ void allowFlashAccess(void)
  *      @brief Function to set access rules for the SRAM region
  *              Shareable, Cacheable
  *      Region Map
- *      | Region | Start Addr | End Addr   |
- *      |--------|------------|------------|
- *      | OS+GV  | 0x20000000 | 0x20000FFF |
- *      | 4K-1   | 0x20001000 | 0x20001FFF |
- *      | 8K-1   | 0x20002000 | 0x20003FFF |
- *      | 4K-2   | 0x20004000 | 0x20004FFF |
- *      | 4K-3   | 0x20005000 | 0x20005FFF |
- *      | 8K-2   | 0x20006000 | 0x20007FFF |
+ *      | Region | Start Addr | End Addr   | AP  |
+ *      |--------|------------|------------|-----|
+ *      | Base   | 0x00000000 | 0xFFFFFFFF | 011 |
+ *      | Flash  | 0x00000000 | 0x0003FFFF | 011 |
+ *      | OS+GV  | 0x20000000 | 0x20000FFF | 001 |
+ *      | 4K-1   | 0x20001000 | 0x20001FFF | 011 |
+ *      | 8K-1   | 0x20002000 | 0x20003FFF | 011 |
+ *      | 4K-2   | 0x20004000 | 0x20004FFF | 011 |
+ *      | 4K-3   | 0x20005000 | 0x20005FFF | 011 |
+ *      | 8K-2   | 0x20006000 | 0x20007FFF | 011 |
  **/
 void setupSramAccess(void)
 {
