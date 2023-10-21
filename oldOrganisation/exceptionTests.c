@@ -26,6 +26,7 @@ void usageFaultTrigger(void)
 {
     uint8_t div = 0;
     uint8_t res = 10 / div;                         // Trigger a divide by zero fault
+    res += res;
 }
 
 /**

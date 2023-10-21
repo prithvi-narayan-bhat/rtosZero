@@ -38,20 +38,12 @@
 // Initialize UART0
 void initUart0()
 {
-    // Configure HW to work with 16 MHz XTAL, PLL enabled, system clock of 40 MHz
-    SYSCTL_RCC_R = SYSCTL_RCC_XTAL_16MHZ | SYSCTL_RCC_OSCSRC_MAIN | SYSCTL_RCC_USESYSDIV | (4 << SYSCTL_RCC_SYSDIV_S);
-
-    // Set GPIO ports to use APB (not needed since default configuration -- for clarity)
-    SYSCTL_GPIOHBCTL_R = 0;
-
     // Enable clocks
     SYSCTL_RCGCUART_R |= SYSCTL_RCGCUART_R0;
     SYSCTL_RCGCGPIO_R |= SYSCTL_RCGCGPIO_R0;
     _delay_cycles(3);
 
     // Configure UART0 pins
-    GPIO_PORTA_DIR_R |= UART_TX_MASK;                          // enable output on UART0 TX pin
-    GPIO_PORTA_DIR_R &= ~UART_RX_MASK;                         // enable input on UART0 RX pin
     GPIO_PORTA_DR2R_R |= UART_TX_MASK;                         // set drive strength to 2mA (not needed since default configuration -- for clarity)
     GPIO_PORTA_DEN_R |= UART_TX_MASK | UART_RX_MASK;           // enable digital on UART0 pins
     GPIO_PORTA_AFSEL_R |= UART_TX_MASK | UART_RX_MASK;         // use peripheral to drive PA0, PA1
