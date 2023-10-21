@@ -12612,18 +12612,6 @@
 //
 //*****************************************************************************
 #define NVIC_MPU_NUMBER_M       0x00000007  // MPU Region to Access
-#define NVIC_MPU_NUMBER_SRAM_8K2                                              \
-                                0x00000007  // SRAM region 5        (User added)
-#define NVIC_MPU_NUMBER_SRAM_4K3                                              \
-                                0x00000006  // SRAM region 4        (User added)
-#define NVIC_MPU_NUMBER_SRAM_4K2                                              \
-                                0x00000005  // SRAM region 3        (User added)
-#define NVIC_MPU_NUMBER_SRAM_8K1                                              \
-                                0x00000004  // SRAM region 2        (User added)
-#define NVIC_MPU_NUMBER_SRAM_4K1                                              \
-                                0x00000003  // SRAM region 1        (User added)
-#define NVIC_MPU_NUMBER_SRAM_OS 0x00000002  // SRAM region 0        (User added)
-#define NVIC_MPU_NUMBER_FLASH   0x00000001  // Flash region         (User added)
 #define NVIC_MPU_NUMBER_S       0
 
 //*****************************************************************************
@@ -12644,22 +12632,12 @@
 //*****************************************************************************
 #define NVIC_MPU_ATTR_XN        0x10000000  // Instruction Access Disable
 #define NVIC_MPU_ATTR_AP_M      0x07000000  // Access Privilege
-#define NVIC_MPU_ATTR_AP_K      0x01000000  // Kernel Full Access       (User added)
-#define NVIC_MPU_ATTR_AP_F      0x03000000  // Access Privilege Full    (User added)
 #define NVIC_MPU_ATTR_TEX_M     0x00380000  // Type Extension Mask
-#define NVIC_MPU_ATTR_TEX_N     0x00000000  // Type Extension Mask      (User added)
 #define NVIC_MPU_ATTR_SHAREABLE 0x00040000  // Shareable
 #define NVIC_MPU_ATTR_CACHEABLE 0x00020000  // Cacheable
 #define NVIC_MPU_ATTR_BUFFRABLE 0x00010000  // Bufferable
 #define NVIC_MPU_ATTR_SRD_M     0x0000FF00  // Subregion Disable Bits
 #define NVIC_MPU_ATTR_SIZE_M    0x0000003E  // Region Size Mask
-#define NVIC_MPU_ATTR_SIZE_FULL (31 << 1)   // Region Size Mask Full    (User added)
-#define NVIC_MPU_ATTR_SIZE_FLASH                                              \
-                                (17 << 1)   // Region Size Mask Flash   (User added)
-#define NVIC_MPU_ATTR_SIZE_SRAM_8K                                            \
-                                (12 << 1)   // Region Size Mask SRAM    (User added)
-#define NVIC_MPU_ATTR_SIZE_SRAM_4K                                            \
-                                (11 << 1)   // Region Size Mask SRAM    (User added)
 #define NVIC_MPU_ATTR_ENABLE    0x00000001  // Region Enable
 
 //*****************************************************************************
