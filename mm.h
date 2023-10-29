@@ -11,13 +11,15 @@
 #ifndef MM_H_
 #define MM_H_
 
-#define NUM_SRAM_REGIONS 4
+#define NUM_SRAM_REGIONS 5
 
 //-----------------------------------------------------------------------------
 // Subroutines
 //-----------------------------------------------------------------------------
 
 void * mallocFromHeap(uint32_t size_in_bytes);
+void generateSrdMasks(uint32_t *baseAdd, uint32_t size_in_bytes, uint8_t *subRegionMap);
+void applySrdRules(uint8_t *subRegionMap);
 void initMpu(void);
 
 #endif
