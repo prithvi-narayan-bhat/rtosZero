@@ -31,9 +31,6 @@
 //*****************************************************************************
 void ResetISR(void);
 static void NmiSR(void);
-#if 0
-static void FaultISR(void);
-#endif
 static void IntDefaultHandler(void);
 
 //*****************************************************************************
@@ -63,6 +60,7 @@ extern void mpuFaultIsr(void);      // To handle MPU faults
 extern void hardFaultIsr(void);     // To handle hard faults
 extern void pendSvIsr(void);        // To handle pendSV faults
 extern void systickIsr(void);       // To handle system ticks
+extern void svCallIsr(void);        // To handle service call interrupts
 
 //*****************************************************************************
 //
@@ -86,7 +84,7 @@ extern void systickIsr(void);       // To handle system ticks
             0,                 // Reserved
             0,                 // Reserved
             0,                 // Reserved
-            IntDefaultHandler, // SVCall handler
+            svCallIsr,         // SVCall handler
             IntDefaultHandler, // Debug monitor handler
             0,                 // Reserved
             pendSvIsr,         // The PendSV handler
@@ -270,26 +268,6 @@ NmiSR(void)
     {
     }
 }
-
-//*****************************************************************************
-//
-// This is the code that gets called when the processor receives a fault
-// interrupt.  This simply enters an infinite loop, preserving the system state
-// for examination by a debugger.
-//
-//*****************************************************************************
-#if 0
-static void
-FaultISR(void)
-{
-    //
-    // Enter an infinite loop.
-    //
-    while(1)
-    {
-    }
-}
-#endif
 
 //*****************************************************************************
 //

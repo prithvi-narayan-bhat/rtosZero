@@ -78,7 +78,7 @@ void initHw(void)
 }
 
 /**
- *      @brief Functio to return a value from 0-63 indicating which of 6 PBs are pressed
+ *      @brief Function to return a value from 0-63 indicating which of 6 PBs are pressed
  *      @return uint8_t Mask of buttons pressed
  **/
 uint8_t readPbs(void)
@@ -95,8 +95,11 @@ uint8_t readPbs(void)
     return retVal;
 }
 
-// one task must be ready at all times or the scheduler will fail
-// the idle task is implemented for this purpose
+/**
+ *      @brief One task must be ready at all times or the scheduler will fail
+ *              The idle task is implemented for this purpose
+ *              This task will turn on the Orange LED
+ **/
 void idle(void)
 {
     while(true)
@@ -108,6 +111,25 @@ void idle(void)
     }
 }
 
+/**
+ *      @brief One task must be ready at all times or the scheduler will fail
+ *              The idle task is implemented for this purpose
+ *              This task will turn on the Orange LED
+ **/
+void idleSomeMore(void)
+{
+    while (true)
+    {
+        setPinValue(YELLOW_LED, 1);
+        waitMicrosecond(1000);
+        setPinValue(YELLOW_LED, 0);
+        yield();
+    }
+}
+
+/**
+*      @brief Function to flash the Green LED at a 4Hz frequency
+**/
 void flash4Hz(void)
 {
     while(true)
@@ -128,14 +150,18 @@ void oneshot(void)
     }
 }
 
+/**
+*      @brief Function to simply add delay to make a function lengthy
+**/
 void partOfLengthyFn(void)
 {
-    // represent some lengthy operation
-    waitMicrosecond(990);
-    // give another process a chance to run
-    yield();
+    waitMicrosecond(990);                                   // Represent some lengthy operation
+    yield();                                                // Give another process a chance to run
 }
 
+/**
+*      @brief Function to emulate a lengthy function by setting the Red LED
+**/
 void lengthyFn(void)
 {
     uint16_t i;
@@ -233,6 +259,9 @@ void errant(void)
     }
 }
 
+/**
+*      @brief A function with the highest priority that toggles the blue LED
+**/
 void important(void)
 {
     while(true)
