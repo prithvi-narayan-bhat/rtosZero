@@ -22,9 +22,9 @@
 
 #define BLUE_LED   PORTF,2 // on-board blue LED
 #define RED_LED    PORTC,6 // off-board red LED
-#define ORANGE_LED PORTA,2 // off-board orange LED
+#define ORANGE_LED PORTC,7 // off-board orange LED
 #define YELLOW_LED PORTC,4 // off-board yellow LED
-#define GREEN_LED  PORTC,7 // off-board green LED
+#define GREEN_LED  PORTC,5 // off-board green LED
 
 // User added
 #define PUB_E1  PORTA,2                             // External push button
@@ -37,9 +37,10 @@
 // Subroutines
 //-----------------------------------------------------------------------------
 
-// Initialize Hardware
-// REQUIRED: Add initialization for blue, orange, red, green, and yellow LEDs
-//           Add initialization for 6 pushbuttons
+/**
+ *      @brief Function to initialise push-buttons and blue, orange, red, green, and yellow LEDs
+ *
+ **/
 void initHw(void)
 {
     // Setup LEDs and pushbuttons
@@ -76,17 +77,20 @@ void initHw(void)
     waitMicrosecond(250000);
 }
 
-// REQUIRED: add code to return a value from 0-63 indicating which of 6 PBs are pressed
+/**
+ *      @brief Functio to return a value from 0-63 indicating which of 6 PBs are pressed
+ *      @return uint8_t Mask of buttons pressed
+ **/
 uint8_t readPbs(void)
 {
     uint8_t retVal = 0;
 
-    if(!getPinValue(PUB_E1)) retVal |= (1 << 0);
-    if(!getPinValue(PUB_E2)) retVal |= (1 << 1);
-    if(!getPinValue(PUB_E3)) retVal |= (1 << 2);
-    if(!getPinValue(PUB_E4)) retVal |= (1 << 3);
-    if(!getPinValue(PUB_E5)) retVal |= (1 << 4);
-    if(!getPinValue(PUB_E6)) retVal |= (1 << 5);
+    if(!getPinValue(PUB_E1)) retVal |= (1 << 0);    // Mask the value of the button press
+    if(!getPinValue(PUB_E2)) retVal |= (1 << 1);    // Mask the value of the button press
+    if(!getPinValue(PUB_E3)) retVal |= (1 << 2);    // Mask the value of the button press
+    if(!getPinValue(PUB_E4)) retVal |= (1 << 3);    // Mask the value of the button press
+    if(!getPinValue(PUB_E5)) retVal |= (1 << 4);    // Mask the value of the button press
+    if(!getPinValue(PUB_E6)) retVal |= (1 << 5);    // Mask the value of the button press
 
     return retVal;
 }
