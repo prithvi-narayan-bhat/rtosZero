@@ -1,4 +1,3 @@
-// GPIO Library
 // Jason Losh
 
 //-----------------------------------------------------------------------------
@@ -308,6 +307,13 @@ void setPinValue(PORT port, uint8_t pin, bool value)
     uint32_t* p;
     p = (uint32_t*)port + pin;
     *p = value;
+}
+
+void togglePinValue(PORT port, uint8_t pin)
+{
+    uint32_t *p;
+    p = (uint32_t *)port + pin;
+    *p ^= 1;
 }
 
 bool getPinValue(PORT port, uint8_t pin)
