@@ -95,8 +95,11 @@ uint8_t readPbs(void)
     return retVal;
 }
 
-// one task must be ready at all times or the scheduler will fail
-// the idle task is implemented for this purpose
+/**
+ *      @brief One task must be ready at all times or the scheduler will fail
+ *              The idle task is implemented for this purpose
+ *              This task will turn on the Orange LED
+ **/
 void idle(void)
 {
     while(true)
@@ -130,10 +133,8 @@ void oneshot(void)
 
 void partOfLengthyFn(void)
 {
-    // represent some lengthy operation
-    waitMicrosecond(990);
-    // give another process a chance to run
-    yield();
+    waitMicrosecond(990);                                   // Represent some lengthy operation
+    yield();                                                // Give another process a chance to run
 }
 
 void lengthyFn(void)
