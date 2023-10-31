@@ -10,5 +10,6 @@ extern uint32_t enablePrivilegedMode(void);         // Function to enable Privil
 extern void loadPSP(uint32_t stackAddr);            // Function to load the stack pointer and set the ASP bit in the CONTROL register
 extern void setASP(void);                           // Function to set the ASP bit in the CONTROL register
 extern void stageMethod(uint32_t stackAddr);        // Function to load a value to the stack pointer
+extern uint32_t getValue(uint32_t);                 // Get a value
 
 #endif

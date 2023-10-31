@@ -6,6 +6,8 @@
     .def stageMethod
     .def setASP
     .def loadPSP
+    .def pushStack
+    .def popStack
 
 getPSP:
     MRS R0, PSP         ; Read the PSP register
@@ -51,3 +53,14 @@ enablePrivilegedMode:
     MSR CONTROL, R0     ; Write the updated value back to CONTROL register
     ISB                 ; Instruction Synchronization Barrier
     BX LR
+
+pushStack:
+    MRS     R0, PSP             ; Load PSP
+    STMDB   R0, {R4-R11, LR}    ; Save registers R4-R11 in decrementing locations from PSP
+    BX LR
+
+popStack:
+    MRS     R1, PSP             ; Load the PSP
+    SUBS    R1, #0x24           ; Go down 9 registers and pop from there
+    LDMIA   R1!, {R4-R11, LR}   ; Load registers R4-R11 from the stack
+    BX      LR

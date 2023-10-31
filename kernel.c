@@ -152,6 +152,7 @@ void startRtos(void)
     uint8_t task = rtosScheduler();         // Invoke RTOS scheduler
 
     void *taskPID = tcb[task].pid;          // Create a function to load the TMPL bit and start the task
+    tcb[task].state = STATE_READY;          // Update the status of the thread
     fn = (_fn)taskPID;                      // Assign locally
 
     applySrdRules(tcb[task].srd);           // Apply the SRD rules specific to the first thread
@@ -194,8 +195,8 @@ bool createThread(_fn fn, const char name[], uint8_t priority, uint32_t stackByt
             strcpy(tcb[i].name, name);                                      // Store name
             tcb[i].state        = STATE_UNRUN;                              // Store initial state as Un-Run
             tcb[i].pid          = fn;                                       // Store PID
-            tcb[i].sp           = (void *)((uint32_t)ptr + stackBytes);     // ptr + (size in hex) @todo convert to hex?
-            tcb[i].spInit       = (void *)((uint32_t)ptr + stackBytes);     // ptr + (size in hex) @todo convert to hex?
+            tcb[i].sp           = (void *)((uint32_t)ptr + stackBytes);     // ptr + (size in hex)
+            tcb[i].spInit       = (void *)((uint32_t)ptr + stackBytes);     // ptr + (size in hex)
             tcb[i].priority     = priority;                                 // Store the requested PID
 
             generateSrdMasks(ptr, stackBytes, tcb[i].srd);                  // Store SRD masks in the TCB
@@ -226,6 +227,7 @@ void setThreadPriority(_fn fn, uint8_t priority)
 // REQUIRED: modify this function to yield execution back to scheduler using pendsv
 void yield(void)
 {
+    __asm(" SVC #0x00");                    // Trigger a Service call
 }
 
 // REQUIRED: modify this function to support 1ms system timer
@@ -264,15 +266,25 @@ void systickIsr(void)
 // REQUIRED: process UNRUN and READY tasks differently
 void pendSvIsr(void)
 {
-    if (getPendSVFlags())
-    {
-        clearPendSVFlags();
-        while (1);
-    }
+    __asm(" MRS     R0, PSP");                      // Load the PSP into a local register
+    __asm(" STMDB   R0, {R4-R11, LR}"); 
+
+    tcb[taskCurrent].sp = (void *)getPSP();         // Store the PSP to the sp of the current task
+    taskCurrent = rtosScheduler();                  // Invoke RTOS scheduler, get next task
+    applySrdRules(tcb[taskCurrent].srd);            // Apply the SRD rules specific to the first thread
+    loadPSP((uint32_t)tcb[taskCurrent].sp);         // Load the new PSP and execute
+
+    __asm(" MRS     R1, PSP");                      // Load the PSP into a local register
+    __asm(" SUBS    R1, #0x24");                    // Go down 9 registers and pop from there
+    __asm(" LDMIA   R1!, {R4-R11, LR}");            // Load registers R4-R11 from the stack
+
+
+    // if(getPendSVFlags())    clearPendSVFlags();
 }
 
 // REQUIRED: modify this function to add support for the service call
 // REQUIRED: in preemptive code, add code to handle synchronization primitives
 void svCallIsr(void)
 {
+    enablePendSV();
 }
