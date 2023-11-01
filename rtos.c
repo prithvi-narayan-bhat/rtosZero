@@ -64,6 +64,7 @@ void main(void)
     initSemaphore(flashReq, 5);
 
     ok = createThread(idle, "Idle", 7, 512);                    // Add an Idle process at lowest priority
+    ok = createThread(idleSomeMore, "idleSomeMore", 7, 512);    // Add an Idle process at lowest priority
 
     // Add other processes
     // ok &= createThread(lengthyFn, "LengthyFn", 6, 1024);

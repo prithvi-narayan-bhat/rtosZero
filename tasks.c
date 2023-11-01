@@ -111,6 +111,22 @@ void idle(void)
     }
 }
 
+/**
+ *      @brief One task must be ready at all times or the scheduler will fail
+ *              The idle task is implemented for this purpose
+ *              This task will turn on the Orange LED
+ **/
+void idleSomeMore(void)
+{
+    while (true)
+    {
+        setPinValue(GREEN_LED, 1);
+        waitMicrosecond(1000);
+        setPinValue(GREEN_LED, 0);
+        yield();
+    }
+}
+
 void flash4Hz(void)
 {
     while(true)

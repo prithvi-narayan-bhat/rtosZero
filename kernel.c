@@ -89,24 +89,31 @@ bool initSemaphore(uint8_t semaphore, uint8_t count)
     return ok;
 }
 
-// REQUIRED: initialize systick for 1ms system timer
+/**
+ *      @brief Initialisation for sysTicks
+ **/
+void initSysTick(void)
+{
+    NVIC_ST_RELOAD_R = 39999;                   // sys_clock * 1 * 10^-3 for a 1ms tick
+    NVIC_ST_CURRENT_R = NVIC_ST_CURRENT_M;      // Clear current value by writing any value
+
+    NVIC_ST_CTRL_R |= NVIC_ST_CTRL_CLK_SRC;     // Enable system clock source for Systick operation
+    NVIC_ST_CTRL_R |= NVIC_ST_CTRL_INTEN;       // Enable systick interrupts
+    NVIC_ST_CTRL_R |= NVIC_ST_CTRL_ENABLE;      // Start systick
+}
+
+/**
+ *      @brief Function to initialise the Task Control Block before starting any threads
+ **/
 void initRtos(void)
 {
-    // /**
-    // *      @todo Move to dedicated function
-    // **/
-    // NVIC_ST_RELOAD_R = 39999;                   // sys_clock * 1 * 10^-3 for a 1ms tick
-    // NVIC_ST_CURRENT_R = NVIC_ST_CURRENT_M;      // Clear current value by writing any value
-
-    // NVIC_ST_CTRL_R |= NVIC_ST_CTRL_CLK_SRC;     // Enable system clock source for Systick operation
-    // NVIC_ST_CTRL_R |= NVIC_ST_CTRL_INTEN;       // Enable systick interrupts
-    // NVIC_ST_CTRL_R |= NVIC_ST_CTRL_ENABLE;      // Start systick
-
     uint8_t i;
-    // no tasks running
-    taskCount = 0;
-    // clear out tcb records
-    for (i = 0; i < MAX_TASKS; i++)
+
+    initSysTick();                              // Initialise system ticks
+
+    taskCount = 0;                              // No tasks running
+
+    for (i = 0; i < MAX_TASKS; i++)             // Clear out tcb records
     {
         tcb[i].state = STATE_INVALID;
         tcb[i].pid = 0;
@@ -264,25 +271,70 @@ void systickIsr(void)
 
 // REQUIRED: in coop and preemptive, modify this function to add support for task switching
 // REQUIRED: process UNRUN and READY tasks differently
-void pendSvIsr(void)
+/**
+ *      @brief Function to handle context switching
+ *              This is essentially an ISR and will be called automatically and performs the following:
+ *              1. PUSH the status of the current context to the stack
+ *              2. Request the scheduler for the next context to be executed
+ *              3. Determine state of next context
+ *              4. If state == STATE_UNRUN, follow same steps as in loading a new context
+ *                  else POP the saved status of context from stack and load it
+ **/
+__attribute__((naked)) void pendSvIsr(void)
 {
-    __asm(" MRS     R0, PSP");                      // Load the PSP into a local register
-    __asm(" STMDB   R0, {R4-R11, LR}"); 
+    __asm(" MRS     R0, PSP");                      // Load the PSP into a local register in the stack frame
+    __asm(" STMDB   R0, {R4-R11, LR}");             // Store registers R4-R11 and LR in the stack frame
+
+    tcb[taskCurrent].state = STATE_READY;           // Update old state to be ready
 
     tcb[taskCurrent].sp = (void *)getPSP();         // Store the PSP to the sp of the current task
     taskCurrent = rtosScheduler();                  // Invoke RTOS scheduler, get next task
+
     applySrdRules(tcb[taskCurrent].srd);            // Apply the SRD rules specific to the first thread
     loadPSP((uint32_t)tcb[taskCurrent].sp);         // Load the new PSP and execute
 
-    __asm(" MRS     R1, PSP");                      // Load the PSP into a local register
-    __asm(" SUBS    R1, #0x24");                    // Go down 9 registers and pop from there
-    __asm(" LDMIA   R1!, {R4-R11, LR}");            // Load registers R4-R11 from the stack
+    switch (tcb[taskCurrent].state)
+    {
+        case STATE_UNRUN:
+        {
+            // Create a stack frame to trick the processor into thinking this thread was previously run
+            uint32_t *psp = (uint32_t *)tcb[taskCurrent].sp; // Get the stack pointer
+            *(psp - 1) = 0x01000000;                // Load the Thumb bit in the xPSR or things go south
+            *(psp - 2) = (uint32_t)tcb[taskCurrent].pid;    // Store PC
+            *(psp - 3) = 0xFFFFFFFD;                // Store LR
+            *(psp - 4) = 0xFFFFFFFF;                // Store R12
+            *(psp - 5) = 0xFFFFFFFF;                // Store R3
+            *(psp - 6) = 0xFFFFFFFF;                // Store R2
+            *(psp - 7) = 0xFFFFFFFF;                // Store R1
+            *(psp - 8) = 0xFFFFFFFF;                // Store R0
 
+            psp = psp - 0x08;                       // Update the PSP pointer to drop down 8 locations so POP can happen without issues
 
+            __asm(" MSR PSP, R0");                  // Load the PSP into the register
+            __asm(" MOVW R0, #0xFFFD");             // Load the lower half-word
+            __asm(" MOVT R0, #0xFFFF");             // Load the upper half-word
+            __asm(" MOV LR, R0");                   // Move the value into the Link Register so the processor auto POP everything
+            __asm(" BX      LR");                   // Branch back
+            break;
+        }
+
+        case STATE_READY:
+        {
+            __asm(" MRS     R1, PSP");              // Load the PSP into a local register
+            __asm(" SUBS    R1, #0x24");            // Go down 9 registers and pop from there
+            __asm(" LDMIA   R1!, {R4-R11, LR}");    // Load registers R4-R11 from the stack
+            __asm(" BX      LR");                   // Branch back
+            break;
+        }
+
+        default:
+        {
+            break;
+        }
+    }
     // if(getPendSVFlags())    clearPendSVFlags();
 }
 
-// REQUIRED: modify this function to add support for the service call
 // REQUIRED: in preemptive code, add code to handle synchronization primitives
 void svCallIsr(void)
 {

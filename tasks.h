@@ -18,6 +18,7 @@
 void initHw(void);
 
 void idle(void);
+void idleSomeMore(void);
 void flash4Hz(void);
 void oneshot(void);
 void partOfLengthyFn(void);
