@@ -317,7 +317,7 @@ void applySrdRules(uint8_t *subRegionMap)
         {
             mask <<= 8;                                         // Move bits to position of SRD within register
             mask |= 0xFF;                                       // So as to not change the lower 8 bits
-            mask |= (0xFFFF << 16);                             // So as to not change the upper 16 bits
+            mask |= (uint32_t)(0xFFFF << 16);                   // So as to not change the upper 16 bits
 
             NVIC_MPU_NUMBER_R   = i;                            // Set SRAM region number
             NVIC_MPU_ATTR_R     |= NVIC_MPU_ATTR_AP_F;          // Privileged access
