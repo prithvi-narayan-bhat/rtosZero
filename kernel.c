@@ -20,6 +20,9 @@
 #include "strings.h"
 #include "systemRegisters.h"
 
+#define     YIELD 0x00              // SVC number for YIELD
+#define     SLEEP 0x01              // SVC number for sleep
+
 //-----------------------------------------------------------------------------
 // RTOS Defines and Kernel Variables
 //-----------------------------------------------------------------------------
@@ -241,6 +244,7 @@ void yield(void)
 // execution yielded back to scheduler until time elapses using pendsv
 void sleep(uint32_t tick)
 {
+     __asm(" SVC #0x01");                            // Trigger a Service call
 }
 
 // REQUIRED: modify this function to lock a mutex using pendsv
@@ -263,14 +267,27 @@ void post(int8_t semaphore)
 {
 }
 
-// REQUIRED: modify this function to add support for the system timer
-// REQUIRED: in preemptive code, add code to request task switch
+/**
+*      @brief Function to decrement the tick count every 1ms
+**/
 void systickIsr(void)
 {
+
+    uint8_t i;
+    for (i = 0; i < MAX_TASKS; i++)
+    {
+        if (tcb[i].state == STATE_DELAYED)                                  // Decrement tick for threads marked "DELAYED"
+        {
+            tcb[i].ticks--;
+            if (tcb[i].ticks == 0)                                          // Update state to ready if ticks run out
+            {
+                tcb[i].state = STATE_READY;
+            }
+        }
+    }
+
 }
 
-// REQUIRED: in coop and preemptive, modify this function to add support for task switching
-// REQUIRED: process UNRUN and READY tasks differently
 /**
  *      @brief Function to handle context switching
  *              This is essentially an ISR and will be called automatically and performs the following:
@@ -285,8 +302,6 @@ __attribute__((naked)) void pendSvIsr(void)
     __asm(" MRS     R0, PSP");                      // Load the PSP into a local register in the stack frame
     __asm(" STMDB   R0, {R4-R11, LR}");             // Store registers R4-R11 and LR in the stack frame
 
-    tcb[taskCurrent].state = STATE_READY;           // Update old state to be ready
-
     tcb[taskCurrent].sp = (void *)getPSP();         // Store the PSP to the sp of the current task
     taskCurrent = rtosScheduler();                  // Invoke RTOS scheduler, get next task
 
@@ -297,6 +312,8 @@ __attribute__((naked)) void pendSvIsr(void)
     {
         case STATE_UNRUN:
         {
+            tcb[taskCurrent].state = STATE_READY;   // Update old state to be ready
+
             // Create a stack frame to trick the processor into thinking this thread was previously run
             uint32_t *psp = (uint32_t *)tcb[taskCurrent].sp; // Get the stack pointer
             *(psp - 1) = 0x01000000;                // Load the Thumb bit in the xPSR or things go south
@@ -332,11 +349,32 @@ __attribute__((naked)) void pendSvIsr(void)
             break;
         }
     }
-    // if(getPendSVFlags())    clearPendSVFlags();
 }
 
-// REQUIRED: in preemptive code, add code to handle synchronization primitives
+/**
+ *      @brief Service Call (SVC) handler for handling SVC requests from tasks
+ *          This function is called in response to SVC instructions triggered by tasks
+ *          It processes different SVC priority values and performs corresponding actions
+ *          Currently supports yield and sleep
+ **/
 void svCallIsr(void)
 {
-    enablePendSV();
+    uint32_t svcAction = getSvcPriority();                                  // Get the action value from the SVC request
+
+    switch (svcAction)                                                      // Check the action value to determine the action to take
+    {
+        case YIELD:                                                         // Yield control to the processor
+        {
+            enablePendSV();                                                 // Enable PendSV to perform a context switch
+            break;
+        }
+
+        case SLEEP:                                                         // Cause function to sleep
+        {
+            tcb[taskCurrent].state = STATE_DELAYED;                         // Set state to Delayed in the Task Control Block
+            tcb[taskCurrent].ticks = getTicks();                            // Get the Ticks from R0
+            enablePendSV();                                                 // Enable PendSV to perform a context switch
+            break;
+        }
+    }
 }

@@ -11,5 +11,7 @@ extern void loadPSP(uint32_t stackAddr);            // Function to load the stac
 extern void setASP(void);                           // Function to set the ASP bit in the CONTROL register
 extern void stageMethod(uint32_t stackAddr);        // Function to load a value to the stack pointer
 extern uint32_t getValue(uint32_t);                 // Get a value
+extern uint32_t getSvcPriority(void);               // Return the SVC priority
+extern uint32_t getTicks(void);                     // Return the sleep Tick value
 
 #endif

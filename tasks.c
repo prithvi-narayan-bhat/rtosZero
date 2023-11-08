@@ -120,9 +120,9 @@ void idleSomeMore(void)
 {
     while (true)
     {
-        setPinValue(GREEN_LED, 1);
+        setPinValue(YELLOW_LED, 1);
         waitMicrosecond(1000);
-        setPinValue(GREEN_LED, 0);
+        setPinValue(YELLOW_LED, 0);
         yield();
     }
 }
@@ -132,7 +132,7 @@ void flash4Hz(void)
     while(true)
     {
         setPinValue(GREEN_LED, !getPinValue(GREEN_LED));
-        sleep(125);
+        sleep(1000);
     }
 }
 
