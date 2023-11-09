@@ -9,7 +9,7 @@
     .def setASP
     .def loadPSP
     .def getSvcPriority
-    .def getTicks
+    .def getArgs
 
 getPSP:
     MRS R0, PSP         ; Read the PSP register
@@ -62,7 +62,7 @@ getSvcPriority:
     LDRB R0, [R0, #-2]  ; Get the value of the argument from the location before the return address pointing to
     BX  LR              ; Return
 
-getTicks:
+getArgs:
     MRS R0, PSP         ; Load PSP into R0 to determine which function made the SV Call
     LDR R0, [R0]        ; Derefernce the value from PSP pointer
     BX  LR

@@ -78,7 +78,7 @@ void initHw(void)
 }
 
 /**
- *      @brief Functio to return a value from 0-63 indicating which of 6 PBs are pressed
+ *      @brief Function to return a value from 0-63 indicating which of 6 PBs are pressed
  *      @return uint8_t Mask of buttons pressed
  **/
 uint8_t readPbs(void)
@@ -127,12 +127,15 @@ void idleSomeMore(void)
     }
 }
 
+/**
+*      @brief Function to flash the Green LED at a 4Hz frequency
+**/
 void flash4Hz(void)
 {
     while(true)
     {
         setPinValue(GREEN_LED, !getPinValue(GREEN_LED));
-        sleep(1000);
+        sleep(125);
     }
 }
 
@@ -147,12 +150,18 @@ void oneshot(void)
     }
 }
 
+/**
+*      @brief Function to simply add delay to make a function lengthy
+**/
 void partOfLengthyFn(void)
 {
     waitMicrosecond(990);                                   // Represent some lengthy operation
     yield();                                                // Give another process a chance to run
 }
 
+/**
+*      @brief Function to emulate a lengthy function by setting the Red LED
+**/
 void lengthyFn(void)
 {
     uint16_t i;
@@ -250,6 +259,9 @@ void errant(void)
     }
 }
 
+/**
+*      @brief A function with the highest priority that toggles the blue LED
+**/
 void important(void)
 {
     while(true)

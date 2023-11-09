@@ -20,8 +20,12 @@
 #include "strings.h"
 #include "systemRegisters.h"
 
-#define     YIELD 0x00              // SVC number for YIELD
-#define     SLEEP 0x01              // SVC number for sleep
+#define     CURRENT_MUTEX   mutexes[tcb[taskCurrent].mutex]
+#define     FIRST_MUTEX     mutexes[0]
+#define     YIELD   0x00                            // SVC number for YIELD
+#define     SLEEP   0x01                            // SVC number for sleep
+#define     LOCK    0x02                            // SVC number for mutex lock
+#define     UNLOCK  0x03                            // SVC number for mutex unlock
 
 //-----------------------------------------------------------------------------
 // RTOS Defines and Kernel Variables
@@ -234,27 +238,36 @@ void setThreadPriority(_fn fn, uint8_t priority)
 {
 }
 
-// REQUIRED: modify this function to yield execution back to scheduler using pendsv
+/**
+ *      @brief Function to yield execution back to scheduler using pendSv
+ **/
 void yield(void)
 {
-    __asm(" SVC #0x00");                    // Trigger a Service call
+    __asm(" SVC #0x00");                                    // Trigger a Service call
 }
 
-// REQUIRED: modify this function to support 1ms system timer
-// execution yielded back to scheduler until time elapses using pendsv
+/**
+*      @brief Function to yield control back to the scheduler for the duration specified
+*      @param tick sleep time in ms
+**/
 void sleep(uint32_t tick)
 {
-     __asm(" SVC #0x01");                            // Trigger a Service call
+    __asm(" SVC #0x01");                                    // Trigger a Service call
 }
 
-// REQUIRED: modify this function to lock a mutex using pendsv
+/**
+ *      @brief Function to lock a mutex using pendSv
+ *      @param mutex mutex number
+ **/
 void lock(int8_t mutex)
 {
+    __asm(" SVC #0x02");                                    // Trigger a Service call
 }
 
 // REQUIRED: modify this function to unlock a mutex using pendsv
 void unlock(int8_t mutex)
 {
+    __asm(" SVC #0x03");                                    // Trigger a Service call
 }
 
 // REQUIRED: modify this function to wait a semaphore using pendsv
@@ -299,48 +312,48 @@ void systickIsr(void)
  **/
 __attribute__((naked)) void pendSvIsr(void)
 {
-    __asm(" MRS     R0, PSP");                      // Load the PSP into a local register in the stack frame
-    __asm(" STMDB   R0, {R4-R11, LR}");             // Store registers R4-R11 and LR in the stack frame
+    __asm(" MRS     R0, PSP");                              // Load the PSP into a local register in the stack frame
+    __asm(" STMDB   R0, {R4-R11, LR}");                     // Store registers R4-R11 and LR in the stack frame
 
-    tcb[taskCurrent].sp = (void *)getPSP();         // Store the PSP to the sp of the current task
-    taskCurrent = rtosScheduler();                  // Invoke RTOS scheduler, get next task
+    tcb[taskCurrent].sp = (void *)getPSP();                 // Store the PSP to the sp of the current task
+    taskCurrent = rtosScheduler();                          // Invoke RTOS scheduler, get next task
 
-    applySrdRules(tcb[taskCurrent].srd);            // Apply the SRD rules specific to the first thread
-    loadPSP((uint32_t)tcb[taskCurrent].sp);         // Load the new PSP and execute
+    applySrdRules(tcb[taskCurrent].srd);                    // Apply the SRD rules specific to the first thread
+    loadPSP((uint32_t)tcb[taskCurrent].sp);                 // Load the new PSP and execute
 
     switch (tcb[taskCurrent].state)
     {
         case STATE_UNRUN:
         {
-            tcb[taskCurrent].state = STATE_READY;   // Update old state to be ready
+            tcb[taskCurrent].state = STATE_READY;           // Update old state to be ready
 
             // Create a stack frame to trick the processor into thinking this thread was previously run
             uint32_t *psp = (uint32_t *)tcb[taskCurrent].sp; // Get the stack pointer
-            *(psp - 1) = 0x01000000;                // Load the Thumb bit in the xPSR or things go south
+            *(psp - 1) = 0x01000000;                        // Load the Thumb bit in the xPSR or things go south
             *(psp - 2) = (uint32_t)tcb[taskCurrent].pid;    // Store PC
-            *(psp - 3) = 0xFFFFFFFD;                // Store LR
-            *(psp - 4) = 0xFFFFFFFF;                // Store R12
-            *(psp - 5) = 0xFFFFFFFF;                // Store R3
-            *(psp - 6) = 0xFFFFFFFF;                // Store R2
-            *(psp - 7) = 0xFFFFFFFF;                // Store R1
-            *(psp - 8) = 0xFFFFFFFF;                // Store R0
+            *(psp - 3) = 0xFFFFFFFD;                        // Store LR
+            *(psp - 4) = 0xFFFFFFFF;                        // Store R12
+            *(psp - 5) = 0xFFFFFFFF;                        // Store R3
+            *(psp - 6) = 0xFFFFFFFF;                        // Store R2
+            *(psp - 7) = 0xFFFFFFFF;                        // Store R1
+            *(psp - 8) = 0xFFFFFFFF;                        // Store R0
 
-            psp = psp - 0x08;                       // Update the PSP pointer to drop down 8 locations so POP can happen without issues
+            psp = psp - 0x08;                               // Update the PSP pointer to drop down 8 locations to POP
 
-            __asm(" MSR PSP, R0");                  // Load the PSP into the register
-            __asm(" MOVW R0, #0xFFFD");             // Load the lower half-word
-            __asm(" MOVT R0, #0xFFFF");             // Load the upper half-word
-            __asm(" MOV LR, R0");                   // Move the value into the Link Register so the processor auto POP everything
-            __asm(" BX      LR");                   // Branch back
+            __asm(" MSR PSP, R0");                          // Load the PSP into the register
+            __asm(" MOVW R0, #0xFFFD");                     // Load the lower half-word
+            __asm(" MOVT R0, #0xFFFF");                     // Load the upper half-word
+            __asm(" MOV LR, R0");                           // Move the value into the Link Register so the processor auto POP everything
+            __asm(" BX      LR");                           // Branch back
             break;
         }
 
         case STATE_READY:
         {
-            __asm(" MRS     R1, PSP");              // Load the PSP into a local register
-            __asm(" SUBS    R1, #0x24");            // Go down 9 registers and pop from there
-            __asm(" LDMIA   R1!, {R4-R11, LR}");    // Load registers R4-R11 from the stack
-            __asm(" BX      LR");                   // Branch back
+            __asm(" MRS     R1, PSP");                      // Load the PSP into a local register
+            __asm(" SUBS    R1, #0x24");                    // Go down 9 registers and pop from there
+            __asm(" LDMIA   R1!, {R4-R11, LR}");            // Load registers R4-R11 from the stack
+            __asm(" BX      LR");                           // Branch back
             break;
         }
 
@@ -359,21 +372,57 @@ __attribute__((naked)) void pendSvIsr(void)
  **/
 void svCallIsr(void)
 {
-    uint32_t svcAction = getSvcPriority();                                  // Get the action value from the SVC request
+    uint32_t svcAction = getSvcPriority();                  // Get the action value from the SVC request
 
-    switch (svcAction)                                                      // Check the action value to determine the action to take
+    switch (svcAction)                                      // Check the action value to determine the action to take
     {
-        case YIELD:                                                         // Yield control to the processor
+        case YIELD:                                         // Yield control to the processor
         {
-            enablePendSV();                                                 // Enable PendSV to perform a context switch
+            enablePendSV();                                 // Enable PendSV to perform a context switch
             break;
         }
 
-        case SLEEP:                                                         // Cause function to sleep
+        case SLEEP:                                         // Cause function to sleep
         {
-            tcb[taskCurrent].state = STATE_DELAYED;                         // Set state to Delayed in the Task Control Block
-            tcb[taskCurrent].ticks = getTicks();                            // Get the Ticks from R0
-            enablePendSV();                                                 // Enable PendSV to perform a context switch
+            tcb[taskCurrent].state = STATE_DELAYED;         // Set state to Delayed in the Task Control Block
+            tcb[taskCurrent].ticks = getArgs();             // Get the Ticks from R0
+            enablePendSV();                                 // Enable PendSV to perform a context switch
+            break;
+        }
+
+        case LOCK:
+        {
+            tcb[taskCurrent].mutex = (uint8_t)getArgs();    // Get the mutex value
+
+            if (!CURRENT_MUTEX.lock)                        // Mutex is free
+            {
+                CURRENT_MUTEX.lockedBy = taskCurrent;       // Say who's locking it
+                CURRENT_MUTEX.lock = true;
+            }
+
+            else
+            {
+                if (CURRENT_MUTEX.queueSize < MAX_MUTEX_QUEUE_SIZE) // Add task to queue only if mutex queue is empty
+                {
+                    CURRENT_MUTEX.processQueue[CURRENT_MUTEX.queueSize++] = taskCurrent;
+                    tcb[taskCurrent].state = STATE_BLOCKED_MUTEX;   // Set state to Delayed in the Task Control Block
+                    enablePendSV();                                 // Enable PendSV to perform a context switch
+                }
+            }
+            break;
+        }
+
+        case UNLOCK:
+        {
+            tcb[taskCurrent].mutex = (uint8_t)getArgs();    // Get the mutex value
+
+            if (CURRENT_MUTEX.lockedBy == taskCurrent)
+            {
+                tcb[CURRENT_MUTEX.processQueue[0]].state = STATE_READY;
+                CURRENT_MUTEX.queueSize--;                  // Decrement count of waiting processes
+
+                // tcb[taskCurrent].state = STATE_READY;       // Set the state to ready
+            }
             break;
         }
     }
