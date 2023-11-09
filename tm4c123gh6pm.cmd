@@ -4,6 +4,8 @@
  *
  * This is derived from revision 15071 of the TivaWare Library.
  *
+ * SRAM (RWX) : origin = 0x20001000, length = 0x00007000
+ * 
  *****************************************************************************/
 
 --retain=g_pfnVectors
@@ -11,7 +13,7 @@
 MEMORY
 {
     FLASH (RX) : origin = 0x00000000, length = 0x00040000
-    SRAM (RWX) : origin = 0x20000000, length = 0x00008000
+    SRAM (RWX) : origin = 0x20000000, length = 0x00001000
 }
 
 /* The following command line options are set as part of the CCS project.    */
