@@ -133,7 +133,10 @@ void initRtos(void)
     }
 }
 
-// REQUIRED: Implement prioritization to NUM_PRIORITIES
+/**
+*      @brief Priority Task Scheduler with round robin for tasks with same priority
+*      @return uint8_t task to be executed
+**/
 uint8_t rtosScheduler(void)
 {
     bool ok;
@@ -245,8 +248,10 @@ void restartThread(_fn fn)
 {
 }
 
-// REQUIRED: modify this function to stop a thread
-// REQUIRED: remove any pending semaphore waiting, unlock any mutexes
+/**
+*      @brief Function to stop a thread
+*      @param fn to be stopped
+**/
 void stopThread(_fn fn)
 {
     __asm(" SVC #0x06");                                    // Trigger a Service call
@@ -315,20 +320,18 @@ void post(int8_t semaphore)
 **/
 void systickIsr(void)
 {
-
     uint8_t i;
     for (i = 0; i < MAX_TASKS; i++)
     {
         if (tcb[i].state == STATE_DELAYED)                  // Decrement tick for threads marked "DELAYED"
         {
-            tcb[i].ticks--;
+            tcb[i].ticks--;                                 // Decrement the ticks count
             if (tcb[i].ticks == 0)                          // Update state to ready if ticks run out
             {
                 tcb[i].state = STATE_READY;
             }
         }
     }
-
 }
 
 /**
@@ -386,11 +389,6 @@ __attribute__((naked)) void pendSvIsr(void)
             __asm(" BX      LR");                           // Branch back
             break;
         }
-
-        default:
-        {
-            break;
-        }
     }
 }
 
@@ -402,6 +400,8 @@ __attribute__((naked)) void pendSvIsr(void)
  **/
 void svCallIsr(void)
 {
+    uint8_t i, j;
+    bool exists;
     uint32_t svcAction = getSvcPriority();                                                  // Get the action value from the SVC request
 
     switch (svcAction)                                                                      // Check the action value to determine the action to take
@@ -481,8 +481,19 @@ void svCallIsr(void)
 
             else if (CURRENT_SEMAPHORE.queueSize < MAX_SEMAPHORE_QUEUE_SIZE)
             {
-                CURRENT_SEMAPHORE.processQueue[CURRENT_SEMAPHORE.queueSize++] = taskCurrent;
-                tcb[taskCurrent].state = STATE_BLOCKED_SEMAPHORE;                           // Set state to Delayed in the Task Control Block
+                for (i = 0; i < CURRENT_SEMAPHORE.queueSize; i++)
+                {
+                    if (CURRENT_SEMAPHORE.processQueue[i] == taskCurrent)                   // Process is already in queue
+                    {
+                        exists = true;                                                      // Set a flag and break
+                        break;
+                    }
+                }
+                if (!exists)                                                                // Add to queue if doesn't exist
+                {
+                    CURRENT_SEMAPHORE.processQueue[CURRENT_SEMAPHORE.queueSize++] = taskCurrent;
+                    tcb[taskCurrent].state = STATE_BLOCKED_SEMAPHORE;                       // Set state to Delayed in the Task Control Block
+                }
             }
 
             enablePendSV();                                                                 // Enable PendSV to perform a context switch
@@ -517,45 +528,53 @@ void svCallIsr(void)
 
         case STOP:
         {
-            uint8_t i;
+            uint32_t pidToStop = (uint32_t)getArgs();                                       // Get the task to be stopped
 
-
-            // Remove task from Mutex queue
-            if (tcb[taskCurrent].state == STATE_BLOCKED_MUTEX)                              // Task is waiting the queue
+            for (i = 0; i < MAX_TASKS; i++)
             {
-                for (i = 0; i < CURRENT_MUTEX.queueSize; i++)
+                if ((uint32_t)tcb[i].pid == pidToStop)
                 {
-                    if (CURRENT_MUTEX.processQueue[i] == taskCurrent)                       // Find task
+                    // Remove task from Mutex queue
+                    if (tcb[i].state == STATE_BLOCKED_MUTEX)                                // Task is waiting the queue
                     {
-                        if ((i + 1) < CURRENT_MUTEX.queueSize)                              // Move lower task to current tasks position
+                        for (j = 0; j < mutexes[tcb[i].mutex].queueSize; j++)
                         {
-                            CURRENT_MUTEX.processQueue[i] = CURRENT_MUTEX.processQueue[i + 1];
-                            CURRENT_MUTEX.queueSize--;                                      // Decrement queue size
+                            if (mutexes[tcb[i].mutex].processQueue[j] == taskCurrent)       // Find task
+                            {
+                                if ((i + 1) < mutexes[tcb[i].mutex].queueSize)              // Move lower task to current tasks position
+                                {
+                                    mutexes[tcb[i].mutex].processQueue[j] = mutexes[tcb[i].mutex].processQueue[j + 1];
+                                    mutexes[tcb[i].mutex].queueSize--;                      // Decrement queue size
+                                }
+                            }
                         }
                     }
-                }
-            }
 
-            // Remove task from Semaphore queue
-            if (tcb[taskCurrent].state == STATE_BLOCKED_SEMAPHORE)                          // Task is waiting the queue
-            {
-                for (i = 0; i < CURRENT_SEMAPHORE.queueSize; i++)
-                {
-                    if (CURRENT_SEMAPHORE.processQueue[i] == taskCurrent)                   // Find task
+                    // Remove task from Semaphore queue
+                    if (tcb[i].state == STATE_BLOCKED_SEMAPHORE)                            // Task is waiting the queue
                     {
-                        if ((i + 1) < CURRENT_SEMAPHORE.queueSize)                          // Move lower task to current tasks position
+                        for (j = 0; j < semaphores[tcb[i].semaphore].queueSize; j++)
                         {
-                            CURRENT_SEMAPHORE.processQueue[i] = CURRENT_SEMAPHORE.processQueue[i + 1];
-                            CURRENT_SEMAPHORE.queueSize--;                                  // Decrement queue size
+                            // Find task
+                            if (semaphores[tcb[i].semaphore].processQueue[j] == taskCurrent)
+                            {
+                                if ((i + 1) < semaphores[tcb[i].semaphore].queueSize)       // Move lower task to current tasks position
+                                {
+                                    semaphores[tcb[i].semaphore].processQueue[j] = semaphores[tcb[i].semaphore].processQueue[j + 1];
+                                    semaphores[tcb[i].semaphore].queueSize--;               // Decrement queue size
+                                }
+                            }
                         }
                     }
+
+                    tcb[i].mutex      = 0;                                                  // Clear values from the TCB
+                    tcb[i].semaphore  = 0;                                                  // Clear values from the TCB
+                    tcb[i].ticks      = 0;                                                  // Clear values from the TCB
+                    tcb[i].state      = STATE_STOPPED;                                      // Mark the state of the thread as stopped
+
+                    break;                                                                  // Break out of the loop
                 }
             }
-
-            tcb[taskCurrent].mutex      = 0;                                                // Clear values from the TCB
-            tcb[taskCurrent].semaphore  = 0;                                                // Clear values from the TCB
-            tcb[taskCurrent].ticks      = 0;                                                // Clear values from the TCB
-            tcb[taskCurrent].state      = STATE_STOPPED;                                    // Mark the state of the thread as stopped
             enablePendSV();                                                                 // Enable PendSV to perform a context switch
             break;
         }
