@@ -29,56 +29,45 @@
 #define     UNLOCK  0x03                            // SVC number for mutex unlock
 #define     WAIT    0x04                            // SVC number for semaphore wait
 #define     POST    0x05                            // SVC number for semaphore post
+#define     STOP    0x06                            // SVC number to stop a thread
 
-
-//-----------------------------------------------------------------------------
-// RTOS Defines and Kernel Variables
-//-----------------------------------------------------------------------------
-
-// mutex
-mutex mutexes[MAX_MUTEXES];
-
-// semaphore
-semaphore semaphores[MAX_SEMAPHORES];
+mutex mutexes[MAX_MUTEXES];                         // Instantiate mutex globally
+semaphore semaphores[MAX_SEMAPHORES];               // Instantiate mutex globally
 
 // task states
-#define STATE_INVALID           0 // no task
-#define STATE_STOPPED           1 // stopped, can be resumed
-#define STATE_UNRUN             2 // task has never been run
-#define STATE_READY             3 // has run, can resume at any time
-#define STATE_DELAYED           4 // has run, but now awaiting timer
-#define STATE_BLOCKED_MUTEX     5 // has run, but now blocked by semaphore
-#define STATE_BLOCKED_SEMAPHORE 6 // has run, but now blocked by semaphore
+#define STATE_INVALID           0                   // no task
+#define STATE_STOPPED           1                   // stopped, can be resumed
+#define STATE_UNRUN             2                   // task has never been run
+#define STATE_READY             3                   // has run, can resume at any time
+#define STATE_DELAYED           4                   // has run, but now awaiting timer
+#define STATE_BLOCKED_MUTEX     5                   // has run, but now blocked by semaphore
+#define STATE_BLOCKED_SEMAPHORE 6                   // has run, but now blocked by semaphore
 
 // task
-uint8_t taskCurrent = 0;          // index of last dispatched task
-uint8_t taskCount = 0;            // total number of valid tasks
+uint8_t taskCurrent = 0;                            // index of last dispatched task
+uint8_t taskCount = 0;                              // total number of valid tasks
 
 // control
-bool priorityScheduler = true;    // priority (true) or round-robin (false)
-bool priorityInheritance = false; // priority inheritance for mutexes
-bool preemption = false;          // preemption (true) or cooperative (false)
+bool priorityScheduler = true;                      // priority (true) or round-robin (false)
+bool priorityInheritance = false;                   // priority inheritance for mutexes
+bool preemption = false;                            // preemption (true) or cooperative (false)
 
-// tcb
+// Task Control Block
 #define NUM_PRIORITIES   8
 struct _tcb
 {
-    uint8_t state;                 // see STATE_ values above
-    void *pid;                     // used to uniquely identify thread (add of task fn)
-    void *spInit;                  // original top of stack
-    void *sp;                      // current stack pointer
-    uint8_t priority;              // 0=highest
-    uint8_t currentPriority;       // 0=highest (needed for pi)
-    uint32_t ticks;                // ticks until sleep complete
-    uint8_t srd[NUM_SRAM_REGIONS]; // MPU subregion disable bits
-    char name[16];                 // name of task used in ps command
-    uint8_t mutex;                 // index of the mutex in use or blocking the thread
-    uint8_t semaphore;             // index of the semaphore that is blocking the thread
+    uint8_t state;                                  // see STATE_ values above
+    void *pid;                                      // used to uniquely identify thread (add of task fn)
+    void *spInit;                                   // original top of stack
+    void *sp;                                       // current stack pointer
+    uint8_t priority;                               // 0=highest
+    uint8_t currentPriority;                        // 0=highest (needed for pi)
+    uint32_t ticks;                                 // ticks until sleep complete
+    uint8_t srd[NUM_SRAM_REGIONS];                  // MPU subregion disable bits
+    char name[16];                                  // name of task used in ps command
+    uint8_t mutex;                                  // index of the mutex in use or blocking the thread
+    uint8_t semaphore;                              // index of the semaphore that is blocking the thread
 } tcb[MAX_TASKS];
-
-//-----------------------------------------------------------------------------
-// Subroutines
-//-----------------------------------------------------------------------------
 
 /**
 *      @brief Function to initialize the mutex structure
@@ -97,6 +86,13 @@ bool initMutex(uint8_t mutex)
     return ok;
 }
 
+/**
+ *      @brief Function to initialise the semaphore structure variables
+ *      @param semaphore to be initialise
+ *      @param count of the semaphore
+ *      @return true if successful
+ *      @return false if unsuccessful
+ **/
 bool initSemaphore(uint8_t semaphore, uint8_t count)
 {
     bool ok = (semaphore < MAX_SEMAPHORES);
@@ -141,15 +137,27 @@ void initRtos(void)
 uint8_t rtosScheduler(void)
 {
     bool ok;
-    static uint8_t task = 0xFF;
+    static uint8_t task = 0xFF, lastTask = 0xFF;            // Keep track of the last selected task with the same priority
+    uint8_t startTask = task;                               // Save the starting task index
+
     ok = false;
-    while (!ok)
+
+    // Iterate through tasks with the same priority in a round-robin fashion
+    do
     {
         task++;
         if (task >= MAX_TASKS)  task = 0;
 
+        // Check if the task is in a runnable state
         ok = (tcb[task].state == STATE_READY || tcb[task].state == STATE_UNRUN);
-    }
+
+        // Break out of loop if we have cycled through tasks with the same priority
+        if (task == startTask)  break;
+
+    } while (!ok || tcb[task].priority == tcb[lastTask].priority);
+
+    lastTask = task;
+
     return task;
 }
 
@@ -241,6 +249,7 @@ void restartThread(_fn fn)
 // REQUIRED: remove any pending semaphore waiting, unlock any mutexes
 void stopThread(_fn fn)
 {
+    __asm(" SVC #0x06");                                    // Trigger a Service call
 }
 
 // REQUIRED: modify this function to set a thread priority
@@ -298,6 +307,7 @@ void wait(int8_t semaphore)
  **/
 void post(int8_t semaphore)
 {
+    __asm(" SVC #0x05");                                    // Trigger a Service call
 }
 
 /**
@@ -471,11 +481,13 @@ void svCallIsr(void)
 
             else if (CURRENT_SEMAPHORE.queueSize < MAX_SEMAPHORE_QUEUE_SIZE)
             {
-                CURRENT_SEMAPHORE.processQueue[CURRENT_MUTEX.queueSize++] = taskCurrent;
+                CURRENT_SEMAPHORE.processQueue[CURRENT_SEMAPHORE.queueSize++] = taskCurrent;
                 tcb[taskCurrent].state = STATE_BLOCKED_SEMAPHORE;                           // Set state to Delayed in the Task Control Block
             }
 
-                enablePendSV();                                                             // Enable PendSV to perform a context switch
+            enablePendSV();                                                                 // Enable PendSV to perform a context switch
+
+            break;
         }
 
         case POST:
@@ -499,7 +511,53 @@ void svCallIsr(void)
             }
 
             enablePendSV();                                                                 // Enable PendSV to perform a context switch
+
+            break;
         }
 
+        case STOP:
+        {
+            uint8_t i;
+
+
+            // Remove task from Mutex queue
+            if (tcb[taskCurrent].state == STATE_BLOCKED_MUTEX)                              // Task is waiting the queue
+            {
+                for (i = 0; i < CURRENT_MUTEX.queueSize; i++)
+                {
+                    if (CURRENT_MUTEX.processQueue[i] == taskCurrent)                       // Find task
+                    {
+                        if ((i + 1) < CURRENT_MUTEX.queueSize)                              // Move lower task to current tasks position
+                        {
+                            CURRENT_MUTEX.processQueue[i] = CURRENT_MUTEX.processQueue[i + 1];
+                            CURRENT_MUTEX.queueSize--;                                      // Decrement queue size
+                        }
+                    }
+                }
+            }
+
+            // Remove task from Semaphore queue
+            if (tcb[taskCurrent].state == STATE_BLOCKED_SEMAPHORE)                          // Task is waiting the queue
+            {
+                for (i = 0; i < CURRENT_SEMAPHORE.queueSize; i++)
+                {
+                    if (CURRENT_SEMAPHORE.processQueue[i] == taskCurrent)                   // Find task
+                    {
+                        if ((i + 1) < CURRENT_SEMAPHORE.queueSize)                          // Move lower task to current tasks position
+                        {
+                            CURRENT_SEMAPHORE.processQueue[i] = CURRENT_SEMAPHORE.processQueue[i + 1];
+                            CURRENT_SEMAPHORE.queueSize--;                                  // Decrement queue size
+                        }
+                    }
+                }
+            }
+
+            tcb[taskCurrent].mutex      = 0;                                                // Clear values from the TCB
+            tcb[taskCurrent].semaphore  = 0;                                                // Clear values from the TCB
+            tcb[taskCurrent].ticks      = 0;                                                // Clear values from the TCB
+            tcb[taskCurrent].state      = STATE_STOPPED;                                    // Mark the state of the thread as stopped
+            enablePendSV();                                                                 // Enable PendSV to perform a context switch
+            break;
+        }
     }
 }
