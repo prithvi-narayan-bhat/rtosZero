@@ -21,11 +21,15 @@
 #include "systemRegisters.h"
 
 #define     CURRENT_MUTEX   mutexes[tcb[taskCurrent].mutex]
+#define     CURRENT_SEMAPHORE   semaphores[tcb[taskCurrent].semaphore]
 #define     FIRST_MUTEX     mutexes[0]
 #define     YIELD   0x00                            // SVC number for YIELD
 #define     SLEEP   0x01                            // SVC number for sleep
 #define     LOCK    0x02                            // SVC number for mutex lock
 #define     UNLOCK  0x03                            // SVC number for mutex unlock
+#define     WAIT    0x04                            // SVC number for semaphore wait
+#define     POST    0x05                            // SVC number for semaphore post
+
 
 //-----------------------------------------------------------------------------
 // RTOS Defines and Kernel Variables
@@ -76,6 +80,12 @@ struct _tcb
 // Subroutines
 //-----------------------------------------------------------------------------
 
+/**
+*      @brief Function to initialize the mutex structure
+*      @param mutex to be initialized
+*      @return true if initialization is successful
+*      @return false if mutex count exceeds maximum
+**/
 bool initMutex(uint8_t mutex)
 {
     bool ok = (mutex < MAX_MUTEXES);
@@ -264,18 +274,28 @@ void lock(int8_t mutex)
     __asm(" SVC #0x02");                                    // Trigger a Service call
 }
 
-// REQUIRED: modify this function to unlock a mutex using pendsv
+/**
+ *      @brief Function to unlock a mutex using pendSv
+ *      @param mutex mutex number
+ **/
 void unlock(int8_t mutex)
 {
     __asm(" SVC #0x03");                                    // Trigger a Service call
 }
 
-// REQUIRED: modify this function to wait a semaphore using pendsv
+/**
+ *      @brief Function to wait for a semaphore pendSv
+ *      @param semaphore semaphore number
+ **/
 void wait(int8_t semaphore)
 {
+    __asm(" SVC #0x04");                                    // Trigger a Service call
 }
 
-// REQUIRED: modify this function to signal a semaphore is available using pendsv
+/**
+ *      @brief Function to signal a semaphore is available using pendsv
+ *      @param semaphore semaphore number
+ **/
 void post(int8_t semaphore)
 {
 }
@@ -289,10 +309,10 @@ void systickIsr(void)
     uint8_t i;
     for (i = 0; i < MAX_TASKS; i++)
     {
-        if (tcb[i].state == STATE_DELAYED)                                  // Decrement tick for threads marked "DELAYED"
+        if (tcb[i].state == STATE_DELAYED)                  // Decrement tick for threads marked "DELAYED"
         {
             tcb[i].ticks--;
-            if (tcb[i].ticks == 0)                                          // Update state to ready if ticks run out
+            if (tcb[i].ticks == 0)                          // Update state to ready if ticks run out
             {
                 tcb[i].state = STATE_READY;
             }
@@ -372,58 +392,114 @@ __attribute__((naked)) void pendSvIsr(void)
  **/
 void svCallIsr(void)
 {
-    uint32_t svcAction = getSvcPriority();                  // Get the action value from the SVC request
+    uint32_t svcAction = getSvcPriority();                                                  // Get the action value from the SVC request
 
-    switch (svcAction)                                      // Check the action value to determine the action to take
+    switch (svcAction)                                                                      // Check the action value to determine the action to take
     {
-        case YIELD:                                         // Yield control to the processor
+        case YIELD:
         {
-            enablePendSV();                                 // Enable PendSV to perform a context switch
+            enablePendSV();
             break;
         }
 
-        case SLEEP:                                         // Cause function to sleep
+        case SLEEP:                                                                         // Cause function to sleep
         {
-            tcb[taskCurrent].state = STATE_DELAYED;         // Set state to Delayed in the Task Control Block
-            tcb[taskCurrent].ticks = getArgs();             // Get the Ticks from R0
-            enablePendSV();                                 // Enable PendSV to perform a context switch
+            tcb[taskCurrent].state = STATE_DELAYED;                                         // Set state to Delayed in the Task Control Block
+            tcb[taskCurrent].ticks = getArgs();                                             // Get the Ticks from R0
+
+            enablePendSV();                                                                 // Enable PendSV to perform a context switch
+
             break;
         }
 
         case LOCK:
         {
-            tcb[taskCurrent].mutex = (uint8_t)getArgs();    // Get the mutex value
+            tcb[taskCurrent].mutex = (uint8_t)getArgs();                                    // Get the mutex value
 
-            if (!CURRENT_MUTEX.lock)                        // Mutex is free
+            if (!CURRENT_MUTEX.lock)                                                        // Mutex is free
             {
-                CURRENT_MUTEX.lockedBy = taskCurrent;       // Say who's locking it
+                CURRENT_MUTEX.lockedBy = taskCurrent;                                       // Say who's locking it
                 CURRENT_MUTEX.lock = true;
             }
 
-            else
+            else if (CURRENT_MUTEX.queueSize < MAX_MUTEX_QUEUE_SIZE)                        // Add task to queue only if mutex queue is empty
             {
-                if (CURRENT_MUTEX.queueSize < MAX_MUTEX_QUEUE_SIZE) // Add task to queue only if mutex queue is empty
-                {
-                    CURRENT_MUTEX.processQueue[CURRENT_MUTEX.queueSize++] = taskCurrent;
-                    tcb[taskCurrent].state = STATE_BLOCKED_MUTEX;   // Set state to Delayed in the Task Control Block
-                    enablePendSV();                                 // Enable PendSV to perform a context switch
-                }
+                CURRENT_MUTEX.processQueue[CURRENT_MUTEX.queueSize++] = taskCurrent;
+                tcb[taskCurrent].state = STATE_BLOCKED_MUTEX;                               // Set state to Delayed in the Task Control Block
             }
+
+            enablePendSV();                                                                 // Enable PendSV to perform a context switch
+
             break;
         }
 
         case UNLOCK:
         {
-            tcb[taskCurrent].mutex = (uint8_t)getArgs();    // Get the mutex value
+            tcb[taskCurrent].mutex = (uint8_t)getArgs();                                    // Get the mutex value
 
             if (CURRENT_MUTEX.lockedBy == taskCurrent)
             {
-                tcb[CURRENT_MUTEX.processQueue[0]].state = STATE_READY;
-                CURRENT_MUTEX.queueSize--;                  // Decrement count of waiting processes
+                if (CURRENT_MUTEX.queueSize)                                                // Can have a max of 2 tasks in the queue
+                {
+                    tcb[CURRENT_MUTEX.processQueue[0]].state = STATE_READY;                 // Ready the oldest waiting task to ready
+                    CURRENT_MUTEX.lockedBy = CURRENT_MUTEX.processQueue[0];                 // Update the ID of the task locking the resource
 
-                // tcb[taskCurrent].state = STATE_READY;       // Set the state to ready
+                    if (CURRENT_MUTEX.queueSize == 2)                                       // Can have a max of 2 tasks in the queue
+                    {
+                        CURRENT_MUTEX.processQueue[0] = CURRENT_MUTEX.processQueue[1];      // Shift the queue up
+                    }
+                    CURRENT_MUTEX.queueSize--;                                              // Decrement count of waiting processes
+                }
+
+                else
+                {
+                    CURRENT_MUTEX.lock = false;                                             // Indicate that mutex is available
+                }
+                enablePendSV();                                                             // Enable PendSV to perform a context switch
             }
             break;
         }
+
+        case WAIT:
+        {
+            tcb[taskCurrent].semaphore = (uint8_t)getArgs();                                // Get semaphore value
+
+            if (CURRENT_SEMAPHORE.count >= 1)                                               // If semaphore value is greater than zero, decrements
+            {
+                CURRENT_SEMAPHORE.count--;
+            }
+
+            else if (CURRENT_SEMAPHORE.queueSize < MAX_SEMAPHORE_QUEUE_SIZE)
+            {
+                CURRENT_SEMAPHORE.processQueue[CURRENT_MUTEX.queueSize++] = taskCurrent;
+                tcb[taskCurrent].state = STATE_BLOCKED_SEMAPHORE;                           // Set state to Delayed in the Task Control Block
+            }
+
+                enablePendSV();                                                             // Enable PendSV to perform a context switch
+        }
+
+        case POST:
+        {
+            tcb[taskCurrent].semaphore = (uint8_t)getArgs();                                // Get semaphore value
+
+            if (CURRENT_SEMAPHORE.queueSize)                                                // Someone is waiting the queue
+            {
+                tcb[CURRENT_SEMAPHORE.processQueue[0]].state = STATE_READY;                 // Update state
+
+                if (CURRENT_SEMAPHORE.queueSize == 2)
+                {
+                    CURRENT_SEMAPHORE.processQueue[0] = CURRENT_SEMAPHORE.processQueue[1];  // Shift up the queue
+                    CURRENT_SEMAPHORE.queueSize--;                                          // Update queue size
+                }
+            }
+
+            else
+            {
+                CURRENT_SEMAPHORE.count++;                                                  // Update that there's one more spot in the semaphore
+            }
+
+            enablePendSV();                                                                 // Enable PendSV to perform a context switch
+        }
+
     }
 }

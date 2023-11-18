@@ -64,14 +64,14 @@ void main(void)
     initSemaphore(flashReq, 5);
 
     ok = createThread(idle, "Idle", 7, 512);                    // Add an Idle process at lowest priority
-    ok &= createThread(idleSomeMore, "idleSomeMore", 7, 512);   // Add an Idle process at lowest priority
+    // ok &= createThread(idleSomeMore, "idleSomeMore", 7, 512);   // Add an Idle process at lowest priority
 
     // Add other processes
     ok &= createThread(lengthyFn, "LengthyFn", 6, 1024);        // Add a lengthy process at a relatively high priority
     ok &= createThread(flash4Hz, "Flash4Hz", 4, 1024);          // Flash LED at 4Hz frequency
-    // ok &= createThread(oneshot, "OneShot", 2, 1024);
-    // ok &= createThread(readKeys, "ReadKeys", 6, 1024);
-    // ok &= createThread(debounce, "Debounce", 6, 1024);
+    ok &= createThread(oneshot, "OneShot", 2, 1024);
+    ok &= createThread(readKeys, "ReadKeys", 6, 1024);
+    ok &= createThread(debounce, "Debounce", 6, 1024);
     ok &= createThread(important, "Important", 0, 1024);        // Toggle LED at the highest priority
     // ok &= createThread(uncooperative, "Uncoop", 6, 1024);
     // ok &= createThread(errant, "Errant", 6, 1024);

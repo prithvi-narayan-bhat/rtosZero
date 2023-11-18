@@ -23,7 +23,7 @@ getMSP:
 
 stageMethod:
     MSR PSP, R0         ; Load the address into PSP register
-    ISB                 ; Instriction sync
+    ISB                 ; Instruction sync
     MRS R1, CONTROL     ; Read the current CONTROL register value
     ORR R1, R1, #0x02   ; Set ASP bit in CONTROL register
     MSR CONTROL, R1     ; Load the new CONTROL register value
