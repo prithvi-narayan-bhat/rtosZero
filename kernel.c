@@ -30,6 +30,7 @@
 #define     WAIT    0x04                            // SVC number for semaphore wait
 #define     POST    0x05                            // SVC number for semaphore post
 #define     STOP    0x06                            // SVC number to stop a thread
+#define     RESTART 0x07                            // SVC number to restart a thread
 
 mutex mutexes[MAX_MUTEXES];                         // Instantiate mutex globally
 semaphore semaphores[MAX_SEMAPHORES];               // Instantiate mutex globally
@@ -56,13 +57,15 @@ bool preemption = false;                            // preemption (true) or coop
 #define NUM_PRIORITIES   8
 struct _tcb
 {
-    uint8_t state;                                  // see STATE_ values above
     void *pid;                                      // used to uniquely identify thread (add of task fn)
     void *spInit;                                   // original top of stack
     void *sp;                                       // current stack pointer
+    uint32_t ticks;                                 // ticks until sleep complete
+
+    uint8_t state;                                  // see STATE_ values above
     uint8_t priority;                               // 0=highest
     uint8_t currentPriority;                        // 0=highest (needed for pi)
-    uint32_t ticks;                                 // ticks until sleep complete
+    uint8_t runInstances;                           // Number of instances task was scheduled
     uint8_t srd[NUM_SRAM_REGIONS];                  // MPU subregion disable bits
     char name[16];                                  // name of task used in ps command
     uint8_t mutex;                                  // index of the mutex in use or blocking the thread
@@ -139,29 +142,22 @@ void initRtos(void)
 **/
 uint8_t rtosScheduler(void)
 {
-    bool ok;
-    static uint8_t task = 0xFF, lastTask = 0xFF;            // Keep track of the last selected task with the same priority
-    uint8_t startTask = task;                               // Save the starting task index
+    uint8_t currentHighestPriority = 0xFF;                                          // Arbitrarily high value
+    uint8_t highestPriorityTask;
+    uint8_t task;
 
-    ok = false;
-
-    // Iterate through tasks with the same priority in a round-robin fashion
-    do
+    for (task = 0; task < MAX_TASKS; task++)                                        // Iterate through all tasks
     {
-        task++;
-        if (task >= MAX_TASKS)  task = 0;
-
-        // Check if the task is in a runnable state
-        ok = (tcb[task].state == STATE_READY || tcb[task].state == STATE_UNRUN);
-
-        // Break out of loop if we have cycled through tasks with the same priority
-        if (task == startTask)  break;
-
-    } while (!ok || tcb[task].priority == tcb[lastTask].priority);
-
-    lastTask = task;
-
-    return task;
+        if (tcb[task].state == STATE_READY || tcb[task].state == STATE_UNRUN)       // Find READY and UNRUN tasks
+        {
+            if (tcb[task].priority < currentHighestPriority)                        // Find the priority
+            {
+                currentHighestPriority = tcb[task].priority;                        // Update the current highest priority
+                highestPriorityTask = taskCurrent = task;                           // Update the current task
+            }
+        }
+    }
+    return highestPriorityTask;                                                     // Return the task to be updated
 }
 
 /**
@@ -243,9 +239,13 @@ bool createThread(_fn fn, const char name[], uint8_t priority, uint32_t stackByt
     return ok;
 }
 
-// REQUIRED: modify this function to restart a thread
+/**
+ *      @brief Function to restart a thread
+ *      @param fn pointer to the function to be restarted
+ **/
 void restartThread(_fn fn)
 {
+    __asm(" SVC #0x07");                                    // Trigger a Service call
 }
 
 /**
@@ -349,7 +349,7 @@ __attribute__((naked)) void pendSvIsr(void)
     __asm(" STMDB   R0, {R4-R11, LR}");                     // Store registers R4-R11 and LR in the stack frame
 
     tcb[taskCurrent].sp = (void *)getPSP();                 // Store the PSP to the sp of the current task
-    taskCurrent = rtosScheduler();                          // Invoke RTOS scheduler, get next task
+    rtosScheduler();                                        // Invoke RTOS scheduler, get next task
 
     applySrdRules(tcb[taskCurrent].srd);                    // Apply the SRD rules specific to the first thread
     loadPSP((uint32_t)tcb[taskCurrent].sp);                 // Load the new PSP and execute
@@ -577,6 +577,19 @@ void svCallIsr(void)
             }
             enablePendSV();                                                                 // Enable PendSV to perform a context switch
             break;
+        }
+
+        case RESTART:
+        {
+            uint32_t pidToStart = (uint32_t)getArgs();                                      // Get the task to be restarted
+
+            for (i = 0; i < MAX_TASKS; i++)
+            {
+                if ((uint32_t)tcb[i].pid == pidToStart)
+                {
+                    tcb[i].state = STATE_READY;
+                }
+            }
         }
     }
 }
