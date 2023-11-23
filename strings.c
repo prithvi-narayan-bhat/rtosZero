@@ -42,36 +42,39 @@
 **/
 void print(void *arg, const char *s, argType_t argType)
 {
-    char str[MAX_STRING_LENGTH];
+    char dest[MAX_STRING_LENGTH];
+    char converted[20];
 
     if (argType == INT)
     {
-        itoa(*((uint32_t *)arg), str);
-        strcat(str, s);
+        itoa(*((uint32_t *)arg), converted);
+        strcpy(dest, s);
+        strcat(dest, converted);
     }
 
     if (argType == BOOL)
     {
         bool val = *(bool *)arg;
-        strcpy(str, s);
+        strcpy(dest, s);
 
-        if (!val)       strcat(str, "OFF");
-        else if (val)   strcat(str, "ON");
+        if (!val)       strcat(dest, " OFF");
+        else if (val)   strcat(dest, " ON");
     }
 
     if (argType == CHAR)
     {
-        strcpy(str, s);
-        strcat(str, (const char *)arg);
+        strcpy(dest, s);
+        strcat(dest, (const char *)arg);
     }
 
     if (argType == HEX)
     {
-        hexToAscii(*((uint32_t *)arg), str);
-        strcat(str, s);
+        htoa(*((uint32_t *)arg), converted);
+        strcpy(dest, s);
+        strcat(dest, converted);
     }
 
-    putsUart0(str);
+    putsUart0(dest);
     putsUart0("\r\n");
 }
 
@@ -151,8 +154,9 @@ char *itoa(int32_t number, char *string)
  *      @brief Function to convert a hex string to ASCII
  *      @param hexValue hexadecimal Value to convert
  *      @param string Hex value converted to string
+ *      @return char* converted string
  **/
-void hexToAscii(uint32_t hexValue, char *string)
+char *htoa(uint32_t hexValue, char *string)
 {
     uint8_t i;
     for (i = 0; i < 8; i++)
@@ -164,6 +168,7 @@ void hexToAscii(uint32_t hexValue, char *string)
     }
 
     *string = '\0';                                                                     // Null-terminate the ASCII string
+    return string;
 }
 
 /**
@@ -279,10 +284,13 @@ void parseInputString(shellData_t *userData)
 
         else if (ASSERT_NUMBER(userData->inputString[character_count]))                 // Validate
         {
-            delimiter_flag = 0;                                                         // Reset flag to 0
-            userData->position[userData->count] = character_count;
-            userData->type[userData->count] = 'n';                                      // Set field type to numeric
-            userData->count++;                                                          // increment count
+            if (delimiter_flag && userData->count < 10)                                 // Validate
+            {
+                delimiter_flag = 0;                                                     // Reset flag to 0
+                userData->position[userData->count] = character_count;
+                userData->type[userData->count] = 'n';                                  // Set field type to numeric
+                userData->count++;                                                      // increment count
+            }
         }
 
         else

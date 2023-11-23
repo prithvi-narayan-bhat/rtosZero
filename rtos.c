@@ -75,7 +75,7 @@ void main(void)
     ok &= createThread(important, "Important", 0, 1024);        // Toggle LED at the highest priority
     // ok &= createThread(uncooperative, "Uncoop", 6, 1024);
     // ok &= createThread(errant, "Errant", 6, 1024);
-    // ok &= createThread(shell, "Shell", 6, 4096);
+    ok &= createThread(shell, "Shell", 6, 4096);
 
     if(ok)      startRtos();                                    // Start up RTOS (never returns)
     else        while(true);
