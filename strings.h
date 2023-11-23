@@ -30,7 +30,7 @@ typedef enum
 
 // Function prototypes
 // String functions
-char *itoa(int32_t number, char *string);
+char *itoa(uint32_t number, char *string);
 void toLower(char *s1);
 bool toBool(char *string);
 int strcmp(const char *s1, const char *s2);
@@ -39,6 +39,7 @@ void strcpy(char *s1, const char *s2);
 void print(void *s1, const char *s2, argType_t type);
 char *htoa(uint32_t hexValue, char *string);
 uint32_t asciiToHex(const char *s);
+char *insertDot(char *inputString);
 
 // Application functions
 void getInputString(shellData_t *shellData);

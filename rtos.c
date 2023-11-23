@@ -69,12 +69,12 @@ void main(void)
     // Add other processes
     ok &= createThread(lengthyFn, "LengthyFn", 6, 1024);        // Add a lengthy process at a relatively high priority
     ok &= createThread(flash4Hz, "Flash4Hz", 4, 1024);          // Flash LED at 4Hz frequency
-    ok &= createThread(oneshot, "OneShot", 2, 1024);
-    ok &= createThread(readKeys, "ReadKeys", 6, 1024);
-    ok &= createThread(debounce, "Debounce", 6, 1024);
+    ok &= createThread(oneshot, "OneShot", 2, 1024);            // Toggle the Yellow LED once
+    ok &= createThread(readKeys, "ReadKeys", 6, 1024);          // Read the state of push button keys
+    ok &= createThread(debounce, "Debounce", 6, 1024);          // Something to prevent debouncing on key press
     ok &= createThread(important, "Important", 0, 1024);        // Toggle LED at the highest priority
-    // ok &= createThread(uncooperative, "Uncoop", 6, 1024);
-    // ok &= createThread(errant, "Errant", 6, 1024);
+    ok &= createThread(uncooperative, "Uncoop", 6, 1024);
+    ok &= createThread(errant, "Errant", 6, 1024);
     ok &= createThread(shell, "Shell", 6, 4096);
 
     if(ok)      startRtos();                                    // Start up RTOS (never returns)

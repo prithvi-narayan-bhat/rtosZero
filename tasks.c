@@ -19,6 +19,7 @@
 #include "wait.h"
 #include "kernel.h"
 #include "tasks.h"
+#include "uart0.h"
 
 #define BLUE_LED   PORTF,2 // on-board blue LED
 #define RED_LED    PORTC,6 // off-board red LED
@@ -34,11 +35,11 @@
 #define PUB_E5  PORTB,7                             // External push button
 #define PUB_E6  PORTB,2                             // External push button
 
-#define PUB_E1_PRESSED !(buttons & 1)
-#define PUB_E2_PRESSED !(buttons & 2)
-#define PUB_E3_PRESSED !(buttons & 4)
-#define PUB_E4_PRESSED !(buttons & 8)
-#define PUB_E5_PRESSED !(buttons & 16)
+#define PUB_E1_PRESSED !(~buttons & 1)
+#define PUB_E2_PRESSED !(~buttons & 2)
+#define PUB_E3_PRESSED !(~buttons & 4)
+#define PUB_E4_PRESSED !(~buttons & 8)
+#define PUB_E5_PRESSED !(~buttons & 16)
 
 //-----------------------------------------------------------------------------
 // Subroutines
@@ -92,12 +93,13 @@ uint8_t readPbs(void)
 {
     uint8_t retVal = 0;
 
-    if(!getPinValue(PUB_E1)) retVal |= (1 << 0);    // Mask the value of the button press
-    if(!getPinValue(PUB_E2)) retVal |= (1 << 1);    // Mask the value of the button press
-    if(!getPinValue(PUB_E3)) retVal |= (1 << 2);    // Mask the value of the button press
-    if(!getPinValue(PUB_E4)) retVal |= (1 << 3);    // Mask the value of the button press
-    if(!getPinValue(PUB_E5)) retVal |= (1 << 4);    // Mask the value of the button press
-    if(!getPinValue(PUB_E6)) retVal |= (1 << 5);    // Mask the value of the button press
+    if      (!getPinValue(PUB_E1)) retVal = (1 << 0);    // Mask the value of the button press
+    else if (!getPinValue(PUB_E2)) retVal = (1 << 1);    // Mask the value of the button press
+    else if (!getPinValue(PUB_E3)) retVal = (1 << 2);    // Mask the value of the button press
+
+    if      (!getPinValue(PUB_E4)) retVal = (1 << 3);    // Mask the value of the button press
+    else if (!getPinValue(PUB_E5)) retVal = (1 << 4);    // Mask the value of the button press
+    else if (!getPinValue(PUB_E6)) retVal = (1 << 5);    // Mask the value of the button press
 
     return retVal;
 }
@@ -280,6 +282,7 @@ void important(void)
         setPinValue(BLUE_LED, 1);
         sleep(1000);
         setPinValue(BLUE_LED, 0);
+        // sleep(1000);
         unlock(resource);
     }
 }

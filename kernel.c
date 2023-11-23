@@ -19,6 +19,7 @@
 #include "faults.h"
 #include "strings.h"
 #include "systemRegisters.h"
+#include "shell.h"
 
 #define     CURRENT_MUTEX       mutexes[tcb[taskCurrent].mutex]
 #define     FIRST_MUTEX         mutexes[0]
@@ -42,6 +43,7 @@
 #define     RUN                 0x15                // SVC number to restart a thread using it's name
 #define     IPCS                0x16                // SVC number to get the status of IPC mechanisms
 #define     SETPRIORITY         0x17                // SVC number to update the priority of a thread
+#define     PRIORITY            0x18                // SVC number to update the priority inheritance state
 
 mutex mutexes[MAX_MUTEXES];                         // Instantiate mutex globally
 semaphore semaphores[MAX_SEMAPHORES];               // Instantiate mutex globally
@@ -54,6 +56,13 @@ semaphore semaphores[MAX_SEMAPHORES];               // Instantiate mutex globall
 #define STATE_DELAYED           4                   // has run, but now awaiting timer
 #define STATE_BLOCKED_MUTEX     5                   // has run, but now blocked by semaphore
 #define STATE_BLOCKED_SEMAPHORE 6                   // has run, but now blocked by semaphore
+
+// PS
+uint8_t activeFillIndex_g = 0;
+uint16_t twoSecondLoad_g = 2000;
+
+// Faults
+uint32_t pidExtern_g = 0;
 
 // task
 uint8_t taskCurrent = 0;                            // index of last dispatched task
@@ -73,6 +82,7 @@ struct _tcb
     void *sp;                                       // current stack pointer
     uint32_t ticks;                                 // ticks until sleep complete
     uint32_t scheduledCount;                        // To keep track of how many times the task was scheduled
+    uint32_t runTime[2];                            // To hold the runTime values
 
     uint8_t state;                                  // see STATE_ values above
     uint8_t priority;                               // 0=highest
@@ -131,6 +141,19 @@ void initSysTick(void)
 }
 
 /**
+*      @brief Function to initialise timer module
+**/
+void initTimer(void)
+{
+    SYSCTL_RCGCWTIMER_R |= SYSCTL_RCGCWTIMER_R0;    // Enable and provide clock to the timer
+    _delay_cycles(3);                               // Delay for sync
+
+    WTIMER0_CTL_R       &= ~TIMER_CTL_TAEN;         // Disable timer before configuring
+    WTIMER0_CFG_R       = TIMER_CFG_32_BIT_TIMER;   // Select 32 bit wide counter
+    WTIMER0_TAMR_R      |= TIMER_TAMR_TACDIR;       // Direction = Up-counter
+}
+
+/**
  *      @brief Function to initialise the Task Control Block before starting any threads
  **/
 void initRtos(void)
@@ -138,6 +161,7 @@ void initRtos(void)
     uint8_t i;
 
     initSysTick();                              // Initialise system ticks
+    initTimer();                                // Initialise timer module
 
     taskCount = 0;                              // No tasks running
 
@@ -165,13 +189,13 @@ uint8_t rtosScheduler(void)
         {
             if (tcb[taskP].state == STATE_READY || tcb[taskP].state == STATE_UNRUN)     // Find READY and UNRUN tasks
             {
-                if (tcb[taskP].priority < currentHighestPriority)                       // Find the priority
+                if (tcb[taskP].currentPriority < currentHighestPriority)                // Find the priority
                 {
-                    currentHighestPriority = tcb[taskP].priority;                       // Update the current highest priority
+                    currentHighestPriority = tcb[taskP].currentPriority;                // Update the current highest priority
                     highestPriorityTask = taskP;                                        // Update the current task
                 }
 
-                else if (tcb[taskP].priority == currentHighestPriority)                 // If there are two ready tasks with same priority
+                else if (tcb[taskP].currentPriority == currentHighestPriority)          // If there are two ready tasks with same priority
                 {
                     // Find the one that was scheduled fewer times
                     if (tcb[taskP].scheduledCount < tcb[highestPriorityTask].scheduledCount)
@@ -231,6 +255,7 @@ void startRtos(void)
     uint8_t task = rtosScheduler();         // Invoke RTOS scheduler
 
     void *taskPID = tcb[task].pid;          // Create a function to load the TMPL bit and start the task
+    pidExtern_g = (uint32_t)taskPID;          // Expose it to the outside world
     tcb[task].state = STATE_READY;          // Update the status of the thread
     fn = (_fn)taskPID;                      // Assign locally
 
@@ -277,6 +302,9 @@ bool createThread(_fn fn, const char name[], uint8_t priority, uint32_t stackByt
             tcb[i].sp           = (void *)((uint32_t)ptr + stackBytes);     // ptr + (size in hex)
             tcb[i].spInit       = (void *)((uint32_t)ptr + stackBytes);     // ptr + (size in hex)
             tcb[i].priority     = priority;                                 // Store the requested PID
+            tcb[i].currentPriority  = priority;                             // Store the requested PID
+            tcb[i].runTime[0]   = 0;
+            tcb[i].runTime[1]   = 0;
 
             generateSrdMasks(ptr, stackBytes, tcb[i].srd);                  // Store SRD masks in the TCB
 
@@ -374,7 +402,7 @@ void post(int8_t semaphore)
 void systickIsr(void)
 {
     uint8_t i;
-    for (i = 0; i < MAX_TASKS; i++)
+    for (i = 0; i < taskCount; i++)
     {
         if (tcb[i].state == STATE_DELAYED)                  // Decrement tick for threads marked "DELAYED"
         {
@@ -387,6 +415,21 @@ void systickIsr(void)
     }
 
     if (preemption)     enablePendSV();
+
+    if (twoSecondLoad_g)
+    {
+        twoSecondLoad_g--;
+    }
+
+    if (!twoSecondLoad_g)                              // One second has elapsed
+    {
+        twoSecondLoad_g = 2000;                             // Reload the value
+        for (i = 0; i < taskCount; i++)
+        {
+            tcb[i].runTime[!activeFillIndex_g] = 0;         // Zero out the values before accumulating new ones
+        }
+        activeFillIndex_g = !activeFillIndex_g;             // Start saving time in the other index
+    }
 }
 
 /**
@@ -400,12 +443,22 @@ void systickIsr(void)
  **/
 __attribute__((naked)) void pendSvIsr(void)
 {
+    WTIMER0_CTL_R &= ~TIMER_CTL_TAEN;                       // Disable timer
     __asm(" MRS     R0, PSP");                              // Load the PSP into a local register in the stack frame
     __asm(" STMDB   R0, {R4-R11, LR}");                     // Store registers R4-R11 and LR in the stack frame
 
     tcb[taskCurrent].sp = (void *)getPSP();                 // Store the PSP to the sp of the current task
+    tcb[taskCurrent].runTime[activeFillIndex_g] += WTIMER0_TAV_R;
+
+    // Check if PendSV was invoked because of an MPU fault
+    if ((getFaultFlags() && NVIC_FAULT_STAT_IERR) || (getFaultFlags() && NVIC_FAULT_STAT_DERR))
+    {
+        tcb[taskCurrent].state = STATE_STOPPED;
+    }
+
     rtosScheduler();                                        // Invoke RTOS scheduler, get next task
 
+    pidExtern_g = (uint32_t)tcb[taskCurrent].pid;
     applySrdRules(tcb[taskCurrent].srd);                    // Apply the SRD rules specific to the first thread
     loadPSP((uint32_t)tcb[taskCurrent].sp);                 // Load the new PSP and execute
 
@@ -432,6 +485,10 @@ __attribute__((naked)) void pendSvIsr(void)
             __asm(" MOVW R0, #0xFFFD");                     // Load the lower half-word
             __asm(" MOVT R0, #0xFFFF");                     // Load the upper half-word
             __asm(" MOV LR, R0");                           // Move the value into the Link Register so the processor auto POP everything
+
+            WTIMER0_TAV_R = 0;
+            WTIMER0_CTL_R |= TIMER_CTL_TAEN;                // Enable timer before branching out to thread
+
             __asm(" BX      LR");                           // Branch back
             break;
         }
@@ -441,6 +498,10 @@ __attribute__((naked)) void pendSvIsr(void)
             __asm(" MRS     R1, PSP");                      // Load the PSP into a local register
             __asm(" SUBS    R1, #0x24");                    // Go down 9 registers and pop from there
             __asm(" LDMIA   R1!, {R4-R11, LR}");            // Load registers R4-R11 from the stack
+
+            WTIMER0_TAV_R = 0;
+            WTIMER0_CTL_R |= TIMER_CTL_TAEN;                // Enable timer before branching out to thread
+
             __asm(" BX      LR");                           // Branch back
             break;
         }
@@ -456,6 +517,7 @@ __attribute__((naked)) void pendSvIsr(void)
 void svCallIsr(void)
 {
     uint8_t i, j;
+    char dest[20];
     bool exists = false;
     uint32_t svcAction = getSvcPriority();                                                  // Get the action value from the SVC request
 
@@ -487,6 +549,14 @@ void svCallIsr(void)
                 CURRENT_MUTEX.lock = true;
             }
 
+            // Priority Inheritance
+            else if (priorityInheritance && (tcb[CURRENT_MUTEX.lockedBy].currentPriority > tcb[taskCurrent].currentPriority))
+            {
+                // Elevate priority of the task holding the resource to that of one requesting it
+                tcb[CURRENT_MUTEX.lockedBy].currentPriority = tcb[taskCurrent].currentPriority;
+            }
+
+            // Priority inheritance is disabled. Add process to queue
             else if (CURRENT_MUTEX.queueSize < MAX_MUTEX_QUEUE_SIZE)                        // Add task to queue only if mutex queue is empty
             {
                 CURRENT_MUTEX.processQueue[CURRENT_MUTEX.queueSize++] = taskCurrent;
@@ -519,6 +589,12 @@ void svCallIsr(void)
                 else
                 {
                     CURRENT_MUTEX.lock = false;                                             // Indicate that mutex is available
+                }
+
+                // Revert to the original priority
+                if (priorityInheritance && tcb[CURRENT_MUTEX.lockedBy].currentPriority != tcb[CURRENT_MUTEX.lockedBy].priority)
+                {
+                    tcb[CURRENT_MUTEX.lockedBy].currentPriority = tcb[CURRENT_MUTEX.lockedBy].priority;
                 }
                 enablePendSV();                                                             // Enable PendSV to perform a context switch
             }
@@ -594,13 +670,14 @@ void svCallIsr(void)
                     {
                         for (j = 0; j < mutexes[tcb[i].mutex].queueSize; j++)
                         {
-                            if (mutexes[tcb[i].mutex].processQueue[j] == taskCurrent)       // Find task
+                            if (mutexes[tcb[i].mutex].processQueue[j] == i)                 // Find task
                             {
                                 if ((i + 1) < mutexes[tcb[i].mutex].queueSize)              // Move lower task to current tasks position
                                 {
                                     mutexes[tcb[i].mutex].processQueue[j] = mutexes[tcb[i].mutex].processQueue[j + 1];
                                     mutexes[tcb[i].mutex].queueSize--;                      // Decrement queue size
                                 }
+                                else mutexes[tcb[i].mutex].queueSize--;                     // Decrement queue size
                             }
                         }
                     }
@@ -611,13 +688,14 @@ void svCallIsr(void)
                         for (j = 0; j < semaphores[tcb[i].semaphore].queueSize; j++)
                         {
                             // Find task
-                            if (semaphores[tcb[i].semaphore].processQueue[j] == taskCurrent)
+                            if (semaphores[tcb[i].semaphore].processQueue[j] == i)
                             {
                                 if ((i + 1) < semaphores[tcb[i].semaphore].queueSize)       // Move lower task to current tasks position
                                 {
                                     semaphores[tcb[i].semaphore].processQueue[j] = semaphores[tcb[i].semaphore].processQueue[j + 1];
                                     semaphores[tcb[i].semaphore].queueSize--;               // Decrement queue size
                                 }
+                                else semaphores[tcb[i].semaphore].queueSize--;              // Decrement queue size
                             }
                         }
                     }
@@ -662,7 +740,28 @@ void svCallIsr(void)
 
         case PS:
         {
-            putsUart0("PS, Baby!");
+            psInfo_t *psInfo = (psInfo_t *)getArgs();
+
+            uint32_t sum = 0;
+            uint32_t cpuTime = 0;
+            for (i = 0; i < MAX_TASKS; i++)
+            {
+                psInfo[i].task = i;
+                psInfo[i].pid = (uint32_t)tcb[i].pid;
+
+                sum += (tcb[i].runTime[!activeFillIndex_g]);
+                cpuTime = (tcb[i].runTime[!activeFillIndex_g]);
+                cpuTime = (cpuTime / 8000);
+
+                psInfo[i].cpuTime = cpuTime;
+                strcpy(psInfo[i].name, tcb[i].name);
+            }
+
+            cpuTime = ((80000000 - sum) / 8000);
+            putsUart0("\r\n\r\nKernel: ");
+            putsUart0(insertDot(itoa(cpuTime, dest)));
+
+            putsUart0("%\r\n");
             break;
         }
 
@@ -671,6 +770,8 @@ void svCallIsr(void)
             priorityScheduler = getArgs();
             if (priorityScheduler)      putsUart0("Scheduler Mode: Priority\r\n");
             else                        putsUart0("Scheduler Mode: Round-Robin\r\n");
+
+            enablePendSV();
 
             break;
         }
@@ -681,18 +782,22 @@ void svCallIsr(void)
             if (priorityScheduler)      putsUart0("Preemption Mode: On\r\n");
             else                        putsUart0("Preemption Mode: Off\r\n");
 
+            enablePendSV();
+
             break;
         }
 
         case PID:
         {
             char *functionName = (char *)getArgs();
+            uint32_t *psp = (uint32_t *)getPSP();
+            uint32_t *pid = (uint32_t *)*(psp + 1);
 
             for (i = 0; i < MAX_TASKS; i++)
             {
                 if (!(strcmp(tcb[i].name, functionName)))
                 {
-                    print((void *)&tcb[i].pid, "PID", INT);
+                    *pid = (uint32_t) tcb[i].pid;
                     break;
                 }
             }
@@ -712,13 +817,14 @@ void svCallIsr(void)
                     {
                         for (j = 0; j < mutexes[tcb[i].mutex].queueSize; j++)
                         {
-                            if (mutexes[tcb[i].mutex].processQueue[j] == taskCurrent)       // Find task
+                            if (mutexes[tcb[i].mutex].processQueue[j] == i)                 // Find task
                             {
                                 if ((i + 1) < mutexes[tcb[i].mutex].queueSize)              // Move lower task to current tasks position
                                 {
                                     mutexes[tcb[i].mutex].processQueue[j] = mutexes[tcb[i].mutex].processQueue[j + 1];
                                     mutexes[tcb[i].mutex].queueSize--;                      // Decrement queue size
                                 }
+                                else mutexes[tcb[i].mutex].queueSize--;                     // Decrement queue size
                             }
                         }
                     }
@@ -729,13 +835,14 @@ void svCallIsr(void)
                         for (j = 0; j < semaphores[tcb[i].semaphore].queueSize; j++)
                         {
                             // Find task
-                            if (semaphores[tcb[i].semaphore].processQueue[j] == taskCurrent)
+                            if (semaphores[tcb[i].semaphore].processQueue[j] == i)
                             {
                                 if ((i + 1) < semaphores[tcb[i].semaphore].queueSize)       // Move lower task to current tasks position
                                 {
                                     semaphores[tcb[i].semaphore].processQueue[j] = semaphores[tcb[i].semaphore].processQueue[j + 1];
                                     semaphores[tcb[i].semaphore].queueSize--;               // Decrement queue size
                                 }
+                                else semaphores[tcb[i].semaphore].queueSize--;              // Decrement queue size
                             }
                         }
                     }
@@ -749,7 +856,7 @@ void svCallIsr(void)
                 }
             }
 
-            print((void *)funcToStop, "killed", CHAR);
+            print((void *)funcToStop, "Stopped", CHAR);
             enablePendSV();                                                                 // Enable PendSV to perform a context switch
             break;
         }
@@ -772,41 +879,34 @@ void svCallIsr(void)
 
         case IPCS:
         {
-            char dest[20];
-            putsUart0("----Semaphore Arrays----\r\n");
+            mutexInfo_t *mutexInfo = (mutexInfo_t *)getArgs();
+            uint32_t *psp = (uint32_t *)getPSP();
+            semaphoreInfo_t *semaphoreInfo = (semaphoreInfo_t *)(*(psp + 1));
+
             for (i = 0; i < MAX_SEMAPHORES; i++)
             {
-                putsUart0("\r\nSemaphore: ");
-                putsUart0(itoa(i, dest));
-                putsUart0("\r\n\tCount:        ");
-                putsUart0(itoa(semaphores[i].count, dest));
-                putsUart0("\r\n\tQueue Size:   ");
-                putsUart0(itoa(semaphores[i].queueSize, dest));
-                putsUart0("\r\n\tQueued PIDs:  ");
+                semaphoreInfo[i].count = semaphores[i].count;
+                semaphoreInfo[i].queueSize = semaphores[i].queueSize;
+
                 for (j = 0; j < semaphores[i].queueSize; j++)
                 {
-                    putsUart0(itoa((uint32_t)tcb[semaphores[i].processQueue[j]].pid, dest));
-                    putsUart0(" ");
+                    semaphoreInfo[i].processQueue[j] = tcb[semaphores[i].processQueue[j]].pid;
+                    strcpy(semaphoreInfo[i].processName[j], tcb[semaphores[i].processQueue[j]].name);
                 }
-                putsUart0("\r\n");
             }
 
-            putsUart0("\r\n\r\n----Mutex Arrays----\r\n");
             for (i = 0; i < MAX_MUTEXES; i++)
             {
-                putsUart0("\r\nMutex: ");
-                putsUart0(itoa(i, dest));
-                putsUart0("\r\n\tLocked By:    ");
-                putsUart0(itoa(mutexes[i].lockedBy, dest));
-                putsUart0("\r\n\tQueue Size:   ");
-                putsUart0(itoa(mutexes[i].queueSize, dest));
-                putsUart0("\r\n\tQueued tasks: ");
+                mutexInfo[i].lock = mutexes[i].lock;
+                mutexInfo[i].lockedBy = mutexes[i].lockedBy;
+                mutexInfo[i].queueSize = mutexes[i].queueSize;
+                strcpy(mutexInfo[i].lockedByName, tcb[mutexes[i].lockedBy].name);
+
                 for (j = 0; j < mutexes[i].queueSize; j++)
                 {
-                    putsUart0(itoa((uint32_t)tcb[mutexes[i].processQueue[j]].pid, dest));
-                    putsUart0(" ");
+                    mutexInfo[i].processQueue[j] = tcb[mutexes[i].processQueue[j]].pid;
+                    strcpy(mutexInfo[i].processName[j], tcb[mutexes[i].processQueue[j]].name);
                 }
-                putsUart0("\r\n");
             }
 
             break;
@@ -823,6 +923,7 @@ void svCallIsr(void)
                 if ((uint32_t)tcb[i].pid == pid)
                 {
                     tcb[i].priority = priority;
+                    tcb[i].currentPriority = priority;
                     break;
                 }
             }
@@ -830,6 +931,18 @@ void svCallIsr(void)
             putsUart0("Priority updated\r\n");
 
             enablePendSV();
+            break;
+        }
+
+        case PRIORITY:
+        {
+            priorityInheritance = getArgs();
+
+            if (priorityInheritance)    putsUart0("Priority Inheritance mode: On\r\n");
+            else                        putsUart0("Priority Inheritance mode: Off\r\n");
+
+            enablePendSV();
+
             break;
         }
     }
