@@ -16,7 +16,7 @@
  **/
 void ps(void)
 {
-    print("", "ps() invoked", CHAR);
+    __asm(" SVC #0x09");                                    // Trigger a Service call
 }
 
 /**
@@ -25,16 +25,24 @@ void ps(void)
  **/
 void ipcs(void)
 {
-    print("", "ipcs() invoked", CHAR);
+    __asm(" SVC #0x16");                                    // Trigger a Service call
 }
 
 /**
- *      @brief Function to kill the process (thread) with matching PID
- *      @param pid to match and kill
+ *      @brief Function to stop a thread/task
+ *      @param pid of function to be killed
  **/
 void kill(uint32_t pid)
 {
-    print((void *)&pid, "killed", INT);
+    __asm(" SVC #0x06");                                    // Trigger a Service call
+}
+
+/**
+ *      @brief Function to reset the system
+ **/
+void reboot(void)
+{
+    __asm(" SVC #0x08");                                    // Trigger a Service call
 }
 
 /**
@@ -43,7 +51,7 @@ void kill(uint32_t pid)
 **/
 void Pkill(char *procName)
 {
-    print((void *)procName, "Process killed:", CHAR);
+    __asm(" SVC #0x14");                                    // Trigger a Service call
 }
 
 /**
@@ -52,16 +60,16 @@ void Pkill(char *procName)
 **/
 void preempt(bool state)
 {
-    print((void *)&state, "Preemption state:", BOOL);
+    __asm(" SVC #0x12");                                    // Trigger a Service call
 }
 
 /**
 *      @brief Function to determine scheduling order
 *      @param state round robin or priority based
 **/
-void sched(bool state)
+void priority(bool state)
 {
-    print((void *)&state, "Priority schedule:", BOOL);
+    __asm(" SVC #0x11");                                    // Trigger a Service call
 }
 
 /**
@@ -70,8 +78,7 @@ void sched(bool state)
 **/
 void pidof(char *procName)
 {
-    uint32_t val = 10048;
-    print((void *)&val, (const char *)procName, INT);
+    __asm(" SVC #0x13");                                    // Trigger a Service call
 }
 
 /**
@@ -80,5 +87,5 @@ void pidof(char *procName)
  **/
 void run(char *procName)
 {
-    setPinValue(LED_R, true);
+    __asm(" SVC #0x15");                                    // Trigger a Service call
 }

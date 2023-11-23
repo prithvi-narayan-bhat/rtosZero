@@ -33,6 +33,13 @@
 #define PUB_E4  PORTB,6                             // External push button
 #define PUB_E5  PORTB,7                             // External push button
 #define PUB_E6  PORTB,2                             // External push button
+
+#define PUB_E1_PRESSED !(buttons & 1)
+#define PUB_E2_PRESSED !(buttons & 2)
+#define PUB_E3_PRESSED !(buttons & 4)
+#define PUB_E4_PRESSED !(buttons & 8)
+#define PUB_E5_PRESSED !(buttons & 16)
+
 //-----------------------------------------------------------------------------
 // Subroutines
 //-----------------------------------------------------------------------------
@@ -177,6 +184,9 @@ void lengthyFn(void)
     }
 }
 
+/**
+ *      @brief Function to act on push button presses
+ **/
 void readKeys(void)
 {
     uint8_t buttons;
@@ -190,25 +200,25 @@ void readKeys(void)
             yield();
         }
         post(keyPressed);
-        if ((buttons & 1) != 0)
+        if (PUB_E1_PRESSED)
         {
             setPinValue(YELLOW_LED, !getPinValue(YELLOW_LED));
             setPinValue(RED_LED, 1);
         }
-        if ((buttons & 2) != 0)
+        else if (PUB_E2_PRESSED)
         {
             post(flashReq);
             setPinValue(RED_LED, 0);
         }
-        if ((buttons & 4) != 0)
+        else if (PUB_E3_PRESSED)
         {
             restartThread(flash4Hz);
         }
-        if ((buttons & 8) != 0)
+        else if (PUB_E4_PRESSED)
         {
             stopThread(flash4Hz);
         }
-        if ((buttons & 16) != 0)
+        else if (PUB_E5_PRESSED)
         {
             setThreadPriority(lengthyFn, 4);
         }

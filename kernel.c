@@ -20,17 +20,28 @@
 #include "strings.h"
 #include "systemRegisters.h"
 
-#define     CURRENT_MUTEX   mutexes[tcb[taskCurrent].mutex]
+#define     CURRENT_MUTEX       mutexes[tcb[taskCurrent].mutex]
+#define     FIRST_MUTEX         mutexes[0]
+
 #define     CURRENT_SEMAPHORE   semaphores[tcb[taskCurrent].semaphore]
-#define     FIRST_MUTEX     mutexes[0]
-#define     YIELD   0x00                            // SVC number for YIELD
-#define     SLEEP   0x01                            // SVC number for sleep
-#define     LOCK    0x02                            // SVC number for mutex lock
-#define     UNLOCK  0x03                            // SVC number for mutex unlock
-#define     WAIT    0x04                            // SVC number for semaphore wait
-#define     POST    0x05                            // SVC number for semaphore post
-#define     STOP    0x06                            // SVC number to stop a thread
-#define     RESTART 0x07                            // SVC number to restart a thread
+
+#define     YIELD               0x00                // SVC number for YIELD
+#define     SLEEP               0x01                // SVC number for sleep
+#define     LOCK                0x02                // SVC number for mutex lock
+#define     UNLOCK              0x03                // SVC number for mutex unlock
+#define     WAIT                0x04                // SVC number for semaphore wait
+#define     POST                0x05                // SVC number for semaphore post
+#define     STOP                0x06                // SVC number to stop or kill a thread using it's PID
+#define     RESTART             0x07                // SVC number to restart a thread using it's PID
+#define     REBOOT              0x08                // SVC number to reset the system
+#define     PS                  0x09                // SVC number for the PS command
+#define     SCHED               0x11                // SVC number to change scheduler mode
+#define     PREEMPT             0x12                // SVC number to change preemption mode
+#define     PID                 0x13                // SVC number to get PID from given string
+#define     PKILL               0x14                // SVC number to stop or kill a thread using it's name
+#define     RUN                 0x15                // SVC number to restart a thread using it's name
+#define     IPCS                0x16                // SVC number to get the status of IPC mechanisms
+#define     SETPRIORITY         0x17                // SVC number to update the priority of a thread
 
 mutex mutexes[MAX_MUTEXES];                         // Instantiate mutex globally
 semaphore semaphores[MAX_SEMAPHORES];               // Instantiate mutex globally
@@ -61,6 +72,7 @@ struct _tcb
     void *spInit;                                   // original top of stack
     void *sp;                                       // current stack pointer
     uint32_t ticks;                                 // ticks until sleep complete
+    uint32_t scheduledCount;                        // To keep track of how many times the task was scheduled
 
     uint8_t state;                                  // see STATE_ values above
     uint8_t priority;                               // 0=highest
@@ -142,22 +154,58 @@ void initRtos(void)
 **/
 uint8_t rtosScheduler(void)
 {
-    uint8_t currentHighestPriority = 0xFF;                                          // Arbitrarily high value
-    uint8_t highestPriorityTask;
-    uint8_t task;
-
-    for (task = 0; task < MAX_TASKS; task++)                                        // Iterate through all tasks
+    // Use priority scheduler
+    if (priorityScheduler)
     {
-        if (tcb[task].state == STATE_READY || tcb[task].state == STATE_UNRUN)       // Find READY and UNRUN tasks
+        uint8_t currentHighestPriority = 0xFF;                                          // Arbitrarily high value
+        uint8_t highestPriorityTask;
+        uint8_t taskP;
+
+        for (taskP = 0; taskP < MAX_TASKS; taskP++)                                     // Iterate through all tasks
         {
-            if (tcb[task].priority < currentHighestPriority)                        // Find the priority
+            if (tcb[taskP].state == STATE_READY || tcb[taskP].state == STATE_UNRUN)     // Find READY and UNRUN tasks
             {
-                currentHighestPriority = tcb[task].priority;                        // Update the current highest priority
-                highestPriorityTask = taskCurrent = task;                           // Update the current task
+                if (tcb[taskP].priority < currentHighestPriority)                       // Find the priority
+                {
+                    currentHighestPriority = tcb[taskP].priority;                       // Update the current highest priority
+                    highestPriorityTask = taskP;                                        // Update the current task
+                }
+
+                else if (tcb[taskP].priority == currentHighestPriority)                 // If there are two ready tasks with same priority
+                {
+                    // Find the one that was scheduled fewer times
+                    if (tcb[taskP].scheduledCount < tcb[highestPriorityTask].scheduledCount)
+                    {
+                        highestPriorityTask = taskP;
+                    }
+                }
             }
         }
+        taskCurrent = highestPriorityTask;
+
+        tcb[taskCurrent].scheduledCount++;                                              // Increment the schedule count
+
+        return taskCurrent;                                                             // Return the task to be updated
     }
-    return highestPriorityTask;                                                     // Return the task to be updated
+
+    // Use round-robin scheduler
+    else
+    {
+        bool ok = false;
+        static uint8_t task = 0xFF;                                                     // Arbitrarily high value
+
+        while (!ok)                                                                     // Iterate over all tasks starting from last task
+        {
+            task++;
+            if (task >= MAX_TASKS)      task = 0;                                       // Roll over task count
+            ok = (tcb[task].state == STATE_READY || tcb[task].state == STATE_UNRUN);    // Schedule READY or UNRUN task
+        }
+
+        taskCurrent = task;                                                             // Update the current task
+        tcb[taskCurrent].scheduledCount++;                                              // Increment the schedule count
+
+        return taskCurrent;                                                             // Return the task count
+    }
 }
 
 /**
@@ -257,9 +305,14 @@ void stopThread(_fn fn)
     __asm(" SVC #0x06");                                    // Trigger a Service call
 }
 
-// REQUIRED: modify this function to set a thread priority
+/**
+*      @brief Function to set the Thread Priority
+*      @param fn pointer to the thread to be updated
+*      @param priority to be set for the thread
+**/
 void setThreadPriority(_fn fn, uint8_t priority)
 {
+    __asm(" SVC #0x17");                                    // Trigger a Service call
 }
 
 /**
@@ -332,6 +385,8 @@ void systickIsr(void)
             }
         }
     }
+
+    if (preemption)     enablePendSV();
 }
 
 /**
@@ -401,7 +456,7 @@ __attribute__((naked)) void pendSvIsr(void)
 void svCallIsr(void)
 {
     uint8_t i, j;
-    bool exists;
+    bool exists = false;
     uint32_t svcAction = getSvcPriority();                                                  // Get the action value from the SVC request
 
     switch (svcAction)                                                                      // Check the action value to determine the action to take
@@ -575,6 +630,8 @@ void svCallIsr(void)
                     break;                                                                  // Break out of the loop
                 }
             }
+
+            print((void *)&pidToStop, "Stopped", INT);
             enablePendSV();                                                                 // Enable PendSV to perform a context switch
             break;
         }
@@ -583,13 +640,197 @@ void svCallIsr(void)
         {
             uint32_t pidToStart = (uint32_t)getArgs();                                      // Get the task to be restarted
 
-            for (i = 0; i < MAX_TASKS; i++)
+            for (i = 0; i < MAX_TASKS; i++)                                                 // Iterate over all tasks
             {
-                if ((uint32_t)tcb[i].pid == pidToStart)
+                if ((uint32_t)tcb[i].pid == pidToStart)                                     // Find the task to be started
                 {
-                    tcb[i].state = STATE_READY;
+                    tcb[i].state = STATE_READY;                                             // Update the state to ready
+                    break;
                 }
             }
+            print((void *)&pidToStart, "Restarted", INT);
+            enablePendSV();                                                                 // Enable PendSV
+            break;
+        }
+
+        case REBOOT:
+        {
+            putsUart0("Rebooting now\r\n");
+            NVIC_APINT_R = (NVIC_APINT_VECTKEY | NVIC_APINT_SYSRESETREQ);                   // Reset System
+            break;
+        }
+
+        case PS:
+        {
+            putsUart0("PS, Baby!");
+            break;
+        }
+
+        case SCHED:
+        {
+            priorityScheduler = getArgs();
+            if (priorityScheduler)      putsUart0("Scheduler Mode: Priority\r\n");
+            else                        putsUart0("Scheduler Mode: Round-Robin\r\n");
+
+            break;
+        }
+
+        case PREEMPT:
+        {
+            preemption = getArgs();
+            if (priorityScheduler)      putsUart0("Preemption Mode: On\r\n");
+            else                        putsUart0("Preemption Mode: Off\r\n");
+
+            break;
+        }
+
+        case PID:
+        {
+            char *functionName = (char *)getArgs();
+
+            for (i = 0; i < MAX_TASKS; i++)
+            {
+                if (!(strcmp(tcb[i].name, functionName)))
+                {
+                    print((void *)&tcb[i].pid, "PID", INT);
+                    break;
+                }
+            }
+            break;
+        }
+
+        case PKILL:
+        {
+            char *funcToStop = (char *)getArgs();                                           // Get the task to be stopped
+
+            for (i = 0; i < MAX_TASKS; i++)                                                 // Iterate over all tasks
+            {
+                if (!(strcmp(tcb[i].name, funcToStop)))                                     // Match the function name in the TCB
+                {
+                    // Remove task from Mutex queue
+                    if (tcb[i].state == STATE_BLOCKED_MUTEX)                                // Task is waiting the queue
+                    {
+                        for (j = 0; j < mutexes[tcb[i].mutex].queueSize; j++)
+                        {
+                            if (mutexes[tcb[i].mutex].processQueue[j] == taskCurrent)       // Find task
+                            {
+                                if ((i + 1) < mutexes[tcb[i].mutex].queueSize)              // Move lower task to current tasks position
+                                {
+                                    mutexes[tcb[i].mutex].processQueue[j] = mutexes[tcb[i].mutex].processQueue[j + 1];
+                                    mutexes[tcb[i].mutex].queueSize--;                      // Decrement queue size
+                                }
+                            }
+                        }
+                    }
+
+                    // Remove task from Semaphore queue
+                    if (tcb[i].state == STATE_BLOCKED_SEMAPHORE)                            // Task is waiting the queue
+                    {
+                        for (j = 0; j < semaphores[tcb[i].semaphore].queueSize; j++)
+                        {
+                            // Find task
+                            if (semaphores[tcb[i].semaphore].processQueue[j] == taskCurrent)
+                            {
+                                if ((i + 1) < semaphores[tcb[i].semaphore].queueSize)       // Move lower task to current tasks position
+                                {
+                                    semaphores[tcb[i].semaphore].processQueue[j] = semaphores[tcb[i].semaphore].processQueue[j + 1];
+                                    semaphores[tcb[i].semaphore].queueSize--;               // Decrement queue size
+                                }
+                            }
+                        }
+                    }
+
+                    tcb[i].mutex      = 0;                                                  // Clear values from the TCB
+                    tcb[i].semaphore  = 0;                                                  // Clear values from the TCB
+                    tcb[i].ticks      = 0;                                                  // Clear values from the TCB
+                    tcb[i].state      = STATE_STOPPED;                                      // Mark the state of the thread as stopped
+
+                    break;                                                                  // Break out of the loop
+                }
+            }
+
+            print((void *)funcToStop, "killed", CHAR);
+            enablePendSV();                                                                 // Enable PendSV to perform a context switch
+            break;
+        }
+
+        case RUN:
+        {
+            char  *pidToStart = (char *)getArgs();                                          // Get the task to be restarted
+
+            for (i = 0; i < MAX_TASKS; i++)                                                 // Iterate over all tasks
+            {
+                if (!(strcmp(tcb[i].name, pidToStart)))                                     // Find the task to be started
+                {
+                    tcb[i].state = STATE_READY;                                             // Update the state to ready
+                }
+            }
+            print((void *)pidToStart, "Running ", CHAR);
+            enablePendSV();                                                                 // Enable PendSV
+            break;
+        }
+
+        case IPCS:
+        {
+            char dest[20];
+            putsUart0("----Semaphore Arrays----\r\n");
+            for (i = 0; i < MAX_SEMAPHORES; i++)
+            {
+                putsUart0("\r\nSemaphore: ");
+                putsUart0(itoa(i, dest));
+                putsUart0("\r\n\tCount:        ");
+                putsUart0(itoa(semaphores[i].count, dest));
+                putsUart0("\r\n\tQueue Size:   ");
+                putsUart0(itoa(semaphores[i].queueSize, dest));
+                putsUart0("\r\n\tQueued PIDs:  ");
+                for (j = 0; j < semaphores[i].queueSize; j++)
+                {
+                    putsUart0(itoa((uint32_t)tcb[semaphores[i].processQueue[j]].pid, dest));
+                    putsUart0(" ");
+                }
+                putsUart0("\r\n");
+            }
+
+            putsUart0("\r\n\r\n----Mutex Arrays----\r\n");
+            for (i = 0; i < MAX_MUTEXES; i++)
+            {
+                putsUart0("\r\nMutex: ");
+                putsUart0(itoa(i, dest));
+                putsUart0("\r\n\tLocked By:    ");
+                putsUart0(itoa(mutexes[i].lockedBy, dest));
+                putsUart0("\r\n\tQueue Size:   ");
+                putsUart0(itoa(mutexes[i].queueSize, dest));
+                putsUart0("\r\n\tQueued tasks: ");
+                for (j = 0; j < mutexes[i].queueSize; j++)
+                {
+                    putsUart0(itoa((uint32_t)tcb[mutexes[i].processQueue[j]].pid, dest));
+                    putsUart0(" ");
+                }
+                putsUart0("\r\n");
+            }
+
+            break;
+        }
+
+        case SETPRIORITY:
+        {
+            uint32_t pid = (uint32_t)getArgs();
+            uint32_t *psp = (uint32_t *)getPSP();
+            uint32_t priority = *(psp + 1);
+
+            for (i = 0; i < MAX_TASKS; i++)
+            {
+                if ((uint32_t)tcb[i].pid == pid)
+                {
+                    tcb[i].priority = priority;
+                    break;
+                }
+            }
+
+            putsUart0("Priority updated\r\n");
+
+            enablePendSV();
+            break;
         }
     }
 }
