@@ -89,3 +89,12 @@ void run(char *procName)
 {
     __asm(" SVC #0x15");                                    // Trigger a Service call
 }
+
+/**
+ *      @brief Function to toggle priority inheritance state
+ *      @param state new priority inheritance state
+ **/
+void inheritance(bool state)
+{
+    __asm(" SVC #0x18");                                    // Trigger a Service call
+}

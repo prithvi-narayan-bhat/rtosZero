@@ -85,6 +85,12 @@ void shell(void)
                 setThreadPriority((_fn)pid, priority);                      // Invoke function
             }
 
+            else IS_COMMAND("inheritance", 2)
+            {
+                char *inheritanceState = getFieldString(&shellData, 1);     // Get arguments
+                inheritance(toBool(inheritanceState));                      // Invoke function
+                yield();
+            }
 
             else IS_COMMAND("ps", 1)
             {

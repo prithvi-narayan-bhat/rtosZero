@@ -42,6 +42,7 @@
 #define     RUN                 0x15                // SVC number to restart a thread using it's name
 #define     IPCS                0x16                // SVC number to get the status of IPC mechanisms
 #define     SETPRIORITY         0x17                // SVC number to update the priority of a thread
+#define     PRIORITY            0x18                // SVC number to update the priority inheritance state
 
 mutex mutexes[MAX_MUTEXES];                         // Instantiate mutex globally
 semaphore semaphores[MAX_SEMAPHORES];               // Instantiate mutex globally
@@ -165,13 +166,13 @@ uint8_t rtosScheduler(void)
         {
             if (tcb[taskP].state == STATE_READY || tcb[taskP].state == STATE_UNRUN)     // Find READY and UNRUN tasks
             {
-                if (tcb[taskP].priority < currentHighestPriority)                       // Find the priority
+                if (tcb[taskP].currentPriority < currentHighestPriority)                // Find the priority
                 {
-                    currentHighestPriority = tcb[taskP].priority;                       // Update the current highest priority
+                    currentHighestPriority = tcb[taskP].currentPriority;                // Update the current highest priority
                     highestPriorityTask = taskP;                                        // Update the current task
                 }
 
-                else if (tcb[taskP].priority == currentHighestPriority)                 // If there are two ready tasks with same priority
+                else if (tcb[taskP].currentPriority == currentHighestPriority)          // If there are two ready tasks with same priority
                 {
                     // Find the one that was scheduled fewer times
                     if (tcb[taskP].scheduledCount < tcb[highestPriorityTask].scheduledCount)
@@ -277,6 +278,7 @@ bool createThread(_fn fn, const char name[], uint8_t priority, uint32_t stackByt
             tcb[i].sp           = (void *)((uint32_t)ptr + stackBytes);     // ptr + (size in hex)
             tcb[i].spInit       = (void *)((uint32_t)ptr + stackBytes);     // ptr + (size in hex)
             tcb[i].priority     = priority;                                 // Store the requested PID
+            tcb[i].currentPriority  = priority;                             // Store the requested PID
 
             generateSrdMasks(ptr, stackBytes, tcb[i].srd);                  // Store SRD masks in the TCB
 
@@ -487,6 +489,14 @@ void svCallIsr(void)
                 CURRENT_MUTEX.lock = true;
             }
 
+            // Priority Inheritance
+            else if (priorityInheritance && (tcb[CURRENT_MUTEX.lockedBy].currentPriority < tcb[taskCurrent].currentPriority))
+            {
+                // Elevate priority of the task holding the resource to that of one requesting it
+                tcb[CURRENT_MUTEX.lockedBy].currentPriority = tcb[taskCurrent].currentPriority;
+            }
+
+            // Priority inheritance is disabled. Add process to queue
             else if (CURRENT_MUTEX.queueSize < MAX_MUTEX_QUEUE_SIZE)                        // Add task to queue only if mutex queue is empty
             {
                 CURRENT_MUTEX.processQueue[CURRENT_MUTEX.queueSize++] = taskCurrent;
@@ -519,6 +529,12 @@ void svCallIsr(void)
                 else
                 {
                     CURRENT_MUTEX.lock = false;                                             // Indicate that mutex is available
+                }
+
+                // Revert to the original priority
+                if (priorityInheritance && tcb[CURRENT_MUTEX.lockedBy].currentPriority != tcb[CURRENT_MUTEX.lockedBy].priority)
+                {
+                    tcb[CURRENT_MUTEX.lockedBy].currentPriority = tcb[CURRENT_MUTEX.lockedBy].priority;
                 }
                 enablePendSV();                                                             // Enable PendSV to perform a context switch
             }
@@ -672,6 +688,8 @@ void svCallIsr(void)
             if (priorityScheduler)      putsUart0("Scheduler Mode: Priority\r\n");
             else                        putsUart0("Scheduler Mode: Round-Robin\r\n");
 
+            enablePendSV();
+
             break;
         }
 
@@ -680,6 +698,8 @@ void svCallIsr(void)
             preemption = getArgs();
             if (priorityScheduler)      putsUart0("Preemption Mode: On\r\n");
             else                        putsUart0("Preemption Mode: Off\r\n");
+
+            enablePendSV();
 
             break;
         }
@@ -823,6 +843,7 @@ void svCallIsr(void)
                 if ((uint32_t)tcb[i].pid == pid)
                 {
                     tcb[i].priority = priority;
+                    tcb[i].currentPriority = priority;
                     break;
                 }
             }
@@ -830,6 +851,18 @@ void svCallIsr(void)
             putsUart0("Priority updated\r\n");
 
             enablePendSV();
+            break;
+        }
+
+        case PRIORITY:
+        {
+            priorityInheritance = getArgs();
+
+            if (priorityInheritance)    putsUart0("Priority Inheritance mode: On\r\n");
+            else                        putsUart0("Priority Inheritance mode: Off\r\n");
+
+            enablePendSV();
+
             break;
         }
     }
