@@ -56,6 +56,14 @@ semaphore semaphores[MAX_SEMAPHORES];               // Instantiate mutex globall
 #define STATE_BLOCKED_MUTEX     5                   // has run, but now blocked by semaphore
 #define STATE_BLOCKED_SEMAPHORE 6                   // has run, but now blocked by semaphore
 
+// PS
+uint8_t activeFillIndex_g = 0;
+uint32_t lastTimeStamp_g = 0;
+uint16_t oneSecondLoad_g = 1000;
+
+// Faults
+uint32_t pidExtern_g = 0;
+
 // task
 uint8_t taskCurrent = 0;                            // index of last dispatched task
 uint8_t taskCount = 0;                              // total number of valid tasks
@@ -74,6 +82,7 @@ struct _tcb
     void *sp;                                       // current stack pointer
     uint32_t ticks;                                 // ticks until sleep complete
     uint32_t scheduledCount;                        // To keep track of how many times the task was scheduled
+    uint32_t runTime[2];                            // To hold the runTime values
 
     uint8_t state;                                  // see STATE_ values above
     uint8_t priority;                               // 0=highest
@@ -132,6 +141,20 @@ void initSysTick(void)
 }
 
 /**
+*      @brief Function to initialise timer module
+**/
+void initTimer(void)
+{
+    SYSCTL_RCGCWTIMER_R |= SYSCTL_RCGCWTIMER_R0;    // Enable and provide clock to the timer
+    _delay_cycles(3);                               // Delay for sync
+
+    WTIMER0_CTL_R       &= ~TIMER_CTL_TAEN;         // Disable timer before configuring
+    WTIMER0_CFG_R       = TIMER_CFG_32_BIT_TIMER;   // Select 32 bit wide counter
+    WTIMER0_TAMR_R      |= TIMER_TAMR_TACDIR;       // Direction = Up-counter
+    WTIMER0_TAV_R       = 0;
+}
+
+/**
  *      @brief Function to initialise the Task Control Block before starting any threads
  **/
 void initRtos(void)
@@ -139,6 +162,7 @@ void initRtos(void)
     uint8_t i;
 
     initSysTick();                              // Initialise system ticks
+    initTimer();                                // Initialise timer module
 
     taskCount = 0;                              // No tasks running
 
@@ -232,6 +256,7 @@ void startRtos(void)
     uint8_t task = rtosScheduler();         // Invoke RTOS scheduler
 
     void *taskPID = tcb[task].pid;          // Create a function to load the TMPL bit and start the task
+    pidExtern_g = (uint32_t)taskPID;          // Expose it to the outside world
     tcb[task].state = STATE_READY;          // Update the status of the thread
     fn = (_fn)taskPID;                      // Assign locally
 
@@ -376,7 +401,7 @@ void post(int8_t semaphore)
 void systickIsr(void)
 {
     uint8_t i;
-    for (i = 0; i < MAX_TASKS; i++)
+    for (i = 0; i < taskCount; i++)
     {
         if (tcb[i].state == STATE_DELAYED)                  // Decrement tick for threads marked "DELAYED"
         {
@@ -389,6 +414,21 @@ void systickIsr(void)
     }
 
     if (preemption)     enablePendSV();
+
+    if (oneSecondLoad_g)
+    {
+        oneSecondLoad_g--;
+    }
+
+    else if (!oneSecondLoad_g)                              // One second has elapsed
+    {
+        oneSecondLoad_g = 999;                              // Reload the value
+        for (i = 0; i < taskCount; i++)
+        {
+            tcb[i].runTime[!activeFillIndex_g] = 0;         // Zero out the values before accumulating new ones
+        }
+        activeFillIndex_g = !activeFillIndex_g;             // Start saving time in the other index
+    }
 }
 
 /**
@@ -406,8 +446,11 @@ __attribute__((naked)) void pendSvIsr(void)
     __asm(" STMDB   R0, {R4-R11, LR}");                     // Store registers R4-R11 and LR in the stack frame
 
     tcb[taskCurrent].sp = (void *)getPSP();                 // Store the PSP to the sp of the current task
+    tcb[taskCurrent].runTime[activeFillIndex_g] = WTIMER0_TAV_R - lastTimeStamp_g;
+
     rtosScheduler();                                        // Invoke RTOS scheduler, get next task
 
+    pidExtern_g = (uint32_t)tcb[taskCurrent].pid;
     applySrdRules(tcb[taskCurrent].srd);                    // Apply the SRD rules specific to the first thread
     loadPSP((uint32_t)tcb[taskCurrent].sp);                 // Load the new PSP and execute
 
@@ -434,6 +477,10 @@ __attribute__((naked)) void pendSvIsr(void)
             __asm(" MOVW R0, #0xFFFD");                     // Load the lower half-word
             __asm(" MOVT R0, #0xFFFF");                     // Load the upper half-word
             __asm(" MOV LR, R0");                           // Move the value into the Link Register so the processor auto POP everything
+
+            lastTimeStamp_g = WTIMER0_TAV_R;
+            WTIMER0_CTL_R |= TIMER_CTL_TAEN;                // Enable timer before branching out to thread
+
             __asm(" BX      LR");                           // Branch back
             break;
         }
@@ -443,6 +490,10 @@ __attribute__((naked)) void pendSvIsr(void)
             __asm(" MRS     R1, PSP");                      // Load the PSP into a local register
             __asm(" SUBS    R1, #0x24");                    // Go down 9 registers and pop from there
             __asm(" LDMIA   R1!, {R4-R11, LR}");            // Load registers R4-R11 from the stack
+
+            lastTimeStamp_g = WTIMER0_TAV_R;
+            WTIMER0_CTL_R |= TIMER_CTL_TAEN;                // Enable timer before branching out to thread
+
             __asm(" BX      LR");                           // Branch back
             break;
         }
@@ -458,6 +509,7 @@ __attribute__((naked)) void pendSvIsr(void)
 void svCallIsr(void)
 {
     uint8_t i, j;
+    char dest[20];
     bool exists = false;
     uint32_t svcAction = getSvcPriority();                                                  // Get the action value from the SVC request
 
@@ -678,7 +730,19 @@ void svCallIsr(void)
 
         case PS:
         {
-            putsUart0("PS, Baby!");
+            putsUart0("Task\t PID\t CPU\t Name\r\n");
+            for (i = 0; i < taskCount; i++)
+            {
+                putsUart0(itoa(i, dest));
+                putsUart0("\t ");
+                putsUart0(itoa((uint32_t)tcb[i].pid, dest));
+                putsUart0("\t ");
+                putsUart0(itoa(((tcb[i].runTime[!activeFillIndex_g]) / 400), dest));
+                putsUart0("%\t ");
+                putsUart0(tcb[i].name);
+                putsUart0("\r\n");
+            }
+            putsUart0("\r\n");
             break;
         }
 

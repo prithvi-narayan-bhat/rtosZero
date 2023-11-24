@@ -20,7 +20,7 @@
 #include "strings.h"
 #include "systemRegisters.h"
 
-uint32_t pid_g;
+extern uint32_t pidExtern_g;
 
 /**
  *      @brief ISR to handle MPU faults
@@ -28,7 +28,7 @@ uint32_t pid_g;
  **/
 void mpuFaultIsr(void)
 {
-    print((void *)&pid_g, "-> MPU fault", INT);
+    print((void *)&pidExtern_g, "-> MPU fault", INT);
     uint32_t *psp;
 
     uint32_t flags = getFaultFlags(), faultAddr = getMemFaultAddress();
@@ -66,7 +66,7 @@ void hardFaultIsr(void)
 
     clearHardFaults();
 
-    print((void *)&pid_g, "-> Hard fault", INT);
+    print((void *)&pidExtern_g, "-> Hard fault", INT);
     print((void *)&psp, "-> PSP", HEX);
     print((void *)&msp, "-> MSP", HEX);
     print((void *)&flags, "-> Fault Flags", HEX);
@@ -80,7 +80,7 @@ void hardFaultIsr(void)
  **/
 void busFaultIsr(void)
 {
-    print((void *)&pid_g, "-> Bus fault", INT);
+    print((void *)&pidExtern_g, "-> Bus fault", INT);
     clearBusFault();
     while(1);
 }
@@ -91,7 +91,7 @@ void busFaultIsr(void)
  **/
 void usageFaultIsr(void)
 {
-    print((void *)&pid_g, "-> Usage fault", INT);       // Debug message
+    print((void *)&pidExtern_g, "-> Usage fault", INT); // Debug message
     clearDivZeroFault();                                // Clear fault
     while(1);                                           // Hold infinitely
 }
