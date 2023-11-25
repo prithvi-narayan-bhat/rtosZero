@@ -206,28 +206,23 @@ void readKeys(void)
         {
             setPinValue(YELLOW_LED, !getPinValue(YELLOW_LED));
             setPinValue(RED_LED, 1);
-            putsUart0("PUB_E1_PRESSED\r\n");
         }
         else if (PUB_E2_PRESSED)
         {
             post(flashReq);
             setPinValue(RED_LED, 0);
-            putsUart0("PUB_E2_PRESSED\r\n");
         }
         else if (PUB_E3_PRESSED)
         {
             restartThread(flash4Hz);
-            putsUart0("PUB_E3_PRESSED\r\n");
         }
         else if (PUB_E4_PRESSED)
         {
             stopThread(flash4Hz);
-            putsUart0("PUB_E4_PRESSED\r\n");
         }
         else if (PUB_E5_PRESSED)
         {
             setThreadPriority(lengthyFn, 4);
-            putsUart0("PUB_E5_PRESSED\r\n");
         }
         yield();
     }

@@ -446,7 +446,7 @@ __attribute__((naked)) void pendSvIsr(void)
     __asm(" STMDB   R0, {R4-R11, LR}");                     // Store registers R4-R11 and LR in the stack frame
 
     tcb[taskCurrent].sp = (void *)getPSP();                 // Store the PSP to the sp of the current task
-    tcb[taskCurrent].runTime[activeFillIndex_g] = WTIMER0_TAV_R - lastTimeStamp_g;
+    tcb[taskCurrent].runTime[activeFillIndex_g] = WTIMER0_TAV_R;
 
     rtosScheduler();                                        // Invoke RTOS scheduler, get next task
 
@@ -479,6 +479,7 @@ __attribute__((naked)) void pendSvIsr(void)
             __asm(" MOV LR, R0");                           // Move the value into the Link Register so the processor auto POP everything
 
             lastTimeStamp_g = WTIMER0_TAV_R;
+            WTIMER0_TAV_R = 0;
             WTIMER0_CTL_R |= TIMER_CTL_TAEN;                // Enable timer before branching out to thread
 
             __asm(" BX      LR");                           // Branch back
@@ -492,6 +493,7 @@ __attribute__((naked)) void pendSvIsr(void)
             __asm(" LDMIA   R1!, {R4-R11, LR}");            // Load registers R4-R11 from the stack
 
             lastTimeStamp_g = WTIMER0_TAV_R;
+            WTIMER0_TAV_R = 0;
             WTIMER0_CTL_R |= TIMER_CTL_TAEN;                // Enable timer before branching out to thread
 
             __asm(" BX      LR");                           // Branch back
@@ -730,6 +732,7 @@ void svCallIsr(void)
 
         case PS:
         {
+            uint32_t sum = 0;
             putsUart0("Task\t PID\t CPU\t Name\r\n");
             for (i = 0; i < taskCount; i++)
             {
@@ -737,11 +740,13 @@ void svCallIsr(void)
                 putsUart0("\t ");
                 putsUart0(itoa((uint32_t)tcb[i].pid, dest));
                 putsUart0("\t ");
-                putsUart0(itoa(((tcb[i].runTime[!activeFillIndex_g]) / 400), dest));
+                sum += (tcb[i].runTime[!activeFillIndex_g]);
+                putsUart0(itoa(((tcb[i].runTime[!activeFillIndex_g]) / 40), dest));
                 putsUart0("%\t ");
                 putsUart0(tcb[i].name);
                 putsUart0("\r\n");
             }
+
             putsUart0("\r\n");
             break;
         }
