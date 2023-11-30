@@ -19,6 +19,7 @@
 #include "faults.h"
 #include "strings.h"
 #include "systemRegisters.h"
+#include "shell.h"
 
 #define     CURRENT_MUTEX       mutexes[tcb[taskCurrent].mutex]
 #define     FIRST_MUTEX         mutexes[0]
@@ -58,8 +59,7 @@ semaphore semaphores[MAX_SEMAPHORES];               // Instantiate mutex globall
 
 // PS
 uint8_t activeFillIndex_g = 0;
-uint32_t lastTimeStamp_g = 0;
-uint16_t oneSecondLoad_g = 1000;
+uint16_t twoSecondLoad_g = 2000;
 
 // Faults
 uint32_t pidExtern_g = 0;
@@ -151,7 +151,6 @@ void initTimer(void)
     WTIMER0_CTL_R       &= ~TIMER_CTL_TAEN;         // Disable timer before configuring
     WTIMER0_CFG_R       = TIMER_CFG_32_BIT_TIMER;   // Select 32 bit wide counter
     WTIMER0_TAMR_R      |= TIMER_TAMR_TACDIR;       // Direction = Up-counter
-    WTIMER0_TAV_R       = 0;
 }
 
 /**
@@ -304,6 +303,8 @@ bool createThread(_fn fn, const char name[], uint8_t priority, uint32_t stackByt
             tcb[i].spInit       = (void *)((uint32_t)ptr + stackBytes);     // ptr + (size in hex)
             tcb[i].priority     = priority;                                 // Store the requested PID
             tcb[i].currentPriority  = priority;                             // Store the requested PID
+            tcb[i].runTime[0]   = 0;
+            tcb[i].runTime[1]   = 0;
 
             generateSrdMasks(ptr, stackBytes, tcb[i].srd);                  // Store SRD masks in the TCB
 
@@ -415,14 +416,14 @@ void systickIsr(void)
 
     if (preemption)     enablePendSV();
 
-    if (oneSecondLoad_g)
+    if (twoSecondLoad_g)
     {
-        oneSecondLoad_g--;
+        twoSecondLoad_g--;
     }
 
-    else if (!oneSecondLoad_g)                              // One second has elapsed
+    if (!twoSecondLoad_g)                              // One second has elapsed
     {
-        oneSecondLoad_g = 999;                              // Reload the value
+        twoSecondLoad_g = 2000;                             // Reload the value
         for (i = 0; i < taskCount; i++)
         {
             tcb[i].runTime[!activeFillIndex_g] = 0;         // Zero out the values before accumulating new ones
@@ -442,11 +443,18 @@ void systickIsr(void)
  **/
 __attribute__((naked)) void pendSvIsr(void)
 {
+    WTIMER0_CTL_R &= ~TIMER_CTL_TAEN;                       // Disable timer
     __asm(" MRS     R0, PSP");                              // Load the PSP into a local register in the stack frame
     __asm(" STMDB   R0, {R4-R11, LR}");                     // Store registers R4-R11 and LR in the stack frame
 
     tcb[taskCurrent].sp = (void *)getPSP();                 // Store the PSP to the sp of the current task
-    tcb[taskCurrent].runTime[activeFillIndex_g] = WTIMER0_TAV_R;
+    tcb[taskCurrent].runTime[activeFillIndex_g] += WTIMER0_TAV_R;
+
+    // Check if PendSV was invoked because of an MPU fault
+    if ((getFaultFlags() && NVIC_FAULT_STAT_IERR) || (getFaultFlags() && NVIC_FAULT_STAT_DERR))
+    {
+        tcb[taskCurrent].state = STATE_STOPPED;
+    }
 
     rtosScheduler();                                        // Invoke RTOS scheduler, get next task
 
@@ -478,7 +486,6 @@ __attribute__((naked)) void pendSvIsr(void)
             __asm(" MOVT R0, #0xFFFF");                     // Load the upper half-word
             __asm(" MOV LR, R0");                           // Move the value into the Link Register so the processor auto POP everything
 
-            lastTimeStamp_g = WTIMER0_TAV_R;
             WTIMER0_TAV_R = 0;
             WTIMER0_CTL_R |= TIMER_CTL_TAEN;                // Enable timer before branching out to thread
 
@@ -492,7 +499,6 @@ __attribute__((naked)) void pendSvIsr(void)
             __asm(" SUBS    R1, #0x24");                    // Go down 9 registers and pop from there
             __asm(" LDMIA   R1!, {R4-R11, LR}");            // Load registers R4-R11 from the stack
 
-            lastTimeStamp_g = WTIMER0_TAV_R;
             WTIMER0_TAV_R = 0;
             WTIMER0_CTL_R |= TIMER_CTL_TAEN;                // Enable timer before branching out to thread
 
@@ -544,7 +550,7 @@ void svCallIsr(void)
             }
 
             // Priority Inheritance
-            else if (priorityInheritance && (tcb[CURRENT_MUTEX.lockedBy].currentPriority < tcb[taskCurrent].currentPriority))
+            else if (priorityInheritance && (tcb[CURRENT_MUTEX.lockedBy].currentPriority > tcb[taskCurrent].currentPriority))
             {
                 // Elevate priority of the task holding the resource to that of one requesting it
                 tcb[CURRENT_MUTEX.lockedBy].currentPriority = tcb[taskCurrent].currentPriority;
@@ -664,13 +670,14 @@ void svCallIsr(void)
                     {
                         for (j = 0; j < mutexes[tcb[i].mutex].queueSize; j++)
                         {
-                            if (mutexes[tcb[i].mutex].processQueue[j] == taskCurrent)       // Find task
+                            if (mutexes[tcb[i].mutex].processQueue[j] == i)                 // Find task
                             {
                                 if ((i + 1) < mutexes[tcb[i].mutex].queueSize)              // Move lower task to current tasks position
                                 {
                                     mutexes[tcb[i].mutex].processQueue[j] = mutexes[tcb[i].mutex].processQueue[j + 1];
                                     mutexes[tcb[i].mutex].queueSize--;                      // Decrement queue size
                                 }
+                                else mutexes[tcb[i].mutex].queueSize--;                     // Decrement queue size
                             }
                         }
                     }
@@ -681,13 +688,14 @@ void svCallIsr(void)
                         for (j = 0; j < semaphores[tcb[i].semaphore].queueSize; j++)
                         {
                             // Find task
-                            if (semaphores[tcb[i].semaphore].processQueue[j] == taskCurrent)
+                            if (semaphores[tcb[i].semaphore].processQueue[j] == i)
                             {
                                 if ((i + 1) < semaphores[tcb[i].semaphore].queueSize)       // Move lower task to current tasks position
                                 {
                                     semaphores[tcb[i].semaphore].processQueue[j] = semaphores[tcb[i].semaphore].processQueue[j + 1];
                                     semaphores[tcb[i].semaphore].queueSize--;               // Decrement queue size
                                 }
+                                else semaphores[tcb[i].semaphore].queueSize--;              // Decrement queue size
                             }
                         }
                     }
@@ -732,22 +740,28 @@ void svCallIsr(void)
 
         case PS:
         {
+            psInfo_t *psInfo = (psInfo_t *)getArgs();
+
             uint32_t sum = 0;
-            putsUart0("Task\t PID\t CPU\t Name\r\n");
-            for (i = 0; i < taskCount; i++)
+            uint32_t cpuTime = 0;
+            for (i = 0; i < MAX_TASKS; i++)
             {
-                putsUart0(itoa(i, dest));
-                putsUart0("\t ");
-                putsUart0(itoa((uint32_t)tcb[i].pid, dest));
-                putsUart0("\t ");
+                psInfo[i].task = i;
+                psInfo[i].pid = (uint32_t)tcb[i].pid;
+
                 sum += (tcb[i].runTime[!activeFillIndex_g]);
-                putsUart0(itoa(((tcb[i].runTime[!activeFillIndex_g]) / 40), dest));
-                putsUart0("%\t ");
-                putsUart0(tcb[i].name);
-                putsUart0("\r\n");
+                cpuTime = (tcb[i].runTime[!activeFillIndex_g]);
+                cpuTime = (cpuTime / 8000);
+
+                psInfo[i].cpuTime = cpuTime;
+                strcpy(psInfo[i].name, tcb[i].name);
             }
 
-            putsUart0("\r\n");
+            cpuTime = ((80000000 - sum) / 8000);
+            putsUart0("\r\n\r\nKernel: ");
+            putsUart0(insertDot(itoa(cpuTime, dest)));
+
+            putsUart0("%\r\n");
             break;
         }
 
@@ -776,12 +790,14 @@ void svCallIsr(void)
         case PID:
         {
             char *functionName = (char *)getArgs();
+            uint32_t *psp = (uint32_t *)getPSP();
+            uint32_t *pid = (uint32_t *)*(psp + 1);
 
             for (i = 0; i < MAX_TASKS; i++)
             {
                 if (!(strcmp(tcb[i].name, functionName)))
                 {
-                    print((void *)&tcb[i].pid, "PID", INT);
+                    *pid = (uint32_t) tcb[i].pid;
                     break;
                 }
             }
@@ -801,13 +817,14 @@ void svCallIsr(void)
                     {
                         for (j = 0; j < mutexes[tcb[i].mutex].queueSize; j++)
                         {
-                            if (mutexes[tcb[i].mutex].processQueue[j] == taskCurrent)       // Find task
+                            if (mutexes[tcb[i].mutex].processQueue[j] == i)                 // Find task
                             {
                                 if ((i + 1) < mutexes[tcb[i].mutex].queueSize)              // Move lower task to current tasks position
                                 {
                                     mutexes[tcb[i].mutex].processQueue[j] = mutexes[tcb[i].mutex].processQueue[j + 1];
                                     mutexes[tcb[i].mutex].queueSize--;                      // Decrement queue size
                                 }
+                                else mutexes[tcb[i].mutex].queueSize--;                     // Decrement queue size
                             }
                         }
                     }
@@ -818,13 +835,14 @@ void svCallIsr(void)
                         for (j = 0; j < semaphores[tcb[i].semaphore].queueSize; j++)
                         {
                             // Find task
-                            if (semaphores[tcb[i].semaphore].processQueue[j] == taskCurrent)
+                            if (semaphores[tcb[i].semaphore].processQueue[j] == i)
                             {
                                 if ((i + 1) < semaphores[tcb[i].semaphore].queueSize)       // Move lower task to current tasks position
                                 {
                                     semaphores[tcb[i].semaphore].processQueue[j] = semaphores[tcb[i].semaphore].processQueue[j + 1];
                                     semaphores[tcb[i].semaphore].queueSize--;               // Decrement queue size
                                 }
+                                else semaphores[tcb[i].semaphore].queueSize--;              // Decrement queue size
                             }
                         }
                     }
@@ -838,7 +856,7 @@ void svCallIsr(void)
                 }
             }
 
-            print((void *)funcToStop, "killed", CHAR);
+            print((void *)funcToStop, "Stopped", CHAR);
             enablePendSV();                                                                 // Enable PendSV to perform a context switch
             break;
         }
@@ -861,41 +879,34 @@ void svCallIsr(void)
 
         case IPCS:
         {
-            char dest[20];
-            putsUart0("----Semaphore Arrays----\r\n");
+            mutexInfo_t *mutexInfo = (mutexInfo_t *)getArgs();
+            uint32_t *psp = (uint32_t *)getPSP();
+            semaphoreInfo_t *semaphoreInfo = (semaphoreInfo_t *)(*(psp + 1));
+
             for (i = 0; i < MAX_SEMAPHORES; i++)
             {
-                putsUart0("\r\nSemaphore: ");
-                putsUart0(itoa(i, dest));
-                putsUart0("\r\n\tCount:        ");
-                putsUart0(itoa(semaphores[i].count, dest));
-                putsUart0("\r\n\tQueue Size:   ");
-                putsUart0(itoa(semaphores[i].queueSize, dest));
-                putsUart0("\r\n\tQueued PIDs:  ");
+                semaphoreInfo[i].count = semaphores[i].count;
+                semaphoreInfo[i].queueSize = semaphores[i].queueSize;
+
                 for (j = 0; j < semaphores[i].queueSize; j++)
                 {
-                    putsUart0(itoa((uint32_t)tcb[semaphores[i].processQueue[j]].pid, dest));
-                    putsUart0(" ");
+                    semaphoreInfo[i].processQueue[j] = tcb[semaphores[i].processQueue[j]].pid;
+                    strcpy(semaphoreInfo[i].processName[j], tcb[semaphores[i].processQueue[j]].name);
                 }
-                putsUart0("\r\n");
             }
 
-            putsUart0("\r\n\r\n----Mutex Arrays----\r\n");
             for (i = 0; i < MAX_MUTEXES; i++)
             {
-                putsUart0("\r\nMutex: ");
-                putsUart0(itoa(i, dest));
-                putsUart0("\r\n\tLocked By:    ");
-                putsUart0(itoa(mutexes[i].lockedBy, dest));
-                putsUart0("\r\n\tQueue Size:   ");
-                putsUart0(itoa(mutexes[i].queueSize, dest));
-                putsUart0("\r\n\tQueued tasks: ");
+                mutexInfo[i].lock = mutexes[i].lock;
+                mutexInfo[i].lockedBy = mutexes[i].lockedBy;
+                mutexInfo[i].queueSize = mutexes[i].queueSize;
+                strcpy(mutexInfo[i].lockedByName, tcb[mutexes[i].lockedBy].name);
+
                 for (j = 0; j < mutexes[i].queueSize; j++)
                 {
-                    putsUart0(itoa((uint32_t)tcb[mutexes[i].processQueue[j]].pid, dest));
-                    putsUart0(" ");
+                    mutexInfo[i].processQueue[j] = tcb[mutexes[i].processQueue[j]].pid;
+                    strcpy(mutexInfo[i].processName[j], tcb[mutexes[i].processQueue[j]].name);
                 }
-                putsUart0("\r\n");
             }
 
             break;

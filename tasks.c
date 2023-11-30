@@ -282,7 +282,7 @@ void important(void)
         setPinValue(BLUE_LED, 1);
         sleep(1000);
         setPinValue(BLUE_LED, 0);
-        sleep(1000);
+        // sleep(1000);
         unlock(resource);
     }
 }
