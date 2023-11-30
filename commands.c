@@ -9,12 +9,13 @@
 #include "commands.h"
 #include "gpio.h"
 #include "pinMappings.h"
+#include "systemRegisters.h"
 
 /**
  *      @brief Function to display the process (thread) status
  *
  **/
-void ps(void)
+void ps(void *ptr)
 {
     __asm(" SVC #0x09");                                    // Trigger a Service call
 }
@@ -23,7 +24,7 @@ void ps(void)
  *      @brief Function to display the inter-process (thread) communication status
  *
  **/
-void ipcs(void)
+void ipcs(void *mutexInfo, void *semaphoreInfo)
 {
     __asm(" SVC #0x16");                                    // Trigger a Service call
 }
@@ -76,7 +77,7 @@ void priority(bool state)
 *      @brief Function to display the PID of given process
 *      @param procName whose PID to print
 **/
-void pidof(char *procName)
+void pidof(char *procName, void *retVal)
 {
     __asm(" SVC #0x13");                                    // Trigger a Service call
 }
