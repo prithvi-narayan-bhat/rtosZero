@@ -49,6 +49,7 @@ void print(void *arg, const char *s, argType_t argType)
     {
         itoa(*((uint32_t *)arg), converted);
         strcpy(dest, s);
+        strcat(dest, "\t");
         strcat(dest, converted);
     }
 
@@ -64,6 +65,7 @@ void print(void *arg, const char *s, argType_t argType)
     if (argType == CHAR)
     {
         strcpy(dest, s);
+        strcat(dest, "\t");
         strcat(dest, (const char *)arg);
     }
 
@@ -71,11 +73,36 @@ void print(void *arg, const char *s, argType_t argType)
     {
         htoa(*((uint32_t *)arg), converted);
         strcpy(dest, s);
+        strcat(dest, "\t");
         strcat(dest, converted);
     }
 
     putsUart0(dest);
     putsUart0("\r\n");
+}
+
+/**
+ *      @brief Function to insert a decimal point two positions before the end of string
+ *
+ *      @param string to manipulate
+ *      @return char* pointer to the decimal string
+ **/
+char *insertDot(char *inputString)
+{
+    uint8_t i, len = strlen(inputString);           // Get length of string
+
+
+    if (len >= 2)                                   // Check if string is long enough to insert a dot
+    {
+        for (i = len + 1; i > len - 2; --i)         // Shift characters to the right to make space for the dot
+        {
+            inputString[i] = inputString[i - 1];
+        }
+
+        inputString[len - 2] = '.';                 // Place a dot at position strlen(string) - 2
+    }
+
+    return inputString;
 }
 
 /**
@@ -140,7 +167,7 @@ static char *itoa_helper(char *string, int32_t number)
 *      @param number to convert
 *      @return char*
 **/
-char *itoa(int32_t number, char *string)
+char *itoa(uint32_t number, char *string)
 {
     char *s = string;
     if (number < 0)  *s++ = '-';
