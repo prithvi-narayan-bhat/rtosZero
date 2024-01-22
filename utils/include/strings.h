@@ -7,7 +7,7 @@
 #define STRINGS_H
 
 #include "uart0.h"
-#include <inttypes.h>
+#include <stdint.h>
 
 #define MAX_STRING_LENGTH   80          // Maximum number of characters in input string
 #define MAX_FIELDS          10          // Maximum number of acceptable arguments
@@ -36,6 +36,7 @@ bool toBool(char *string);
 int strcmp(const char *s1, const char *s2);
 char *strcat(char *s1, const char *s2);
 void strcpy(char *s1, const char *s2);
+uint32_t strlen(const char *s1);
 void print(void *s1, const char *s2, argType_t type);
 char *htoa(uint32_t hexValue, char *string);
 uint32_t asciiToHex(const char *s);

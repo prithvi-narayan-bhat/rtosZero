@@ -35,7 +35,7 @@ typedef struct _mutex
     uint32_t processQueue[MAX_MUTEX_QUEUE_SIZE];
     uint32_t lockedBy;
 } mutex;
-mutex mutexes[MAX_MUTEXES];
+// mutex mutexes[MAX_MUTEXES];
 #define resource 0
 
 // semaphore
@@ -47,7 +47,7 @@ typedef struct _semaphore
     uint16_t queueSize;
     uint32_t processQueue[MAX_SEMAPHORE_QUEUE_SIZE];
 } semaphore;
-semaphore semaphores[MAX_SEMAPHORES];
+// semaphore semaphores[MAX_SEMAPHORES];
 #define keyPressed 0
 #define keyReleased 1
 #define flashReq 2

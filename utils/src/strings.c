@@ -7,7 +7,7 @@
 #include <stdlib.h>
 #include "uart0.h"
 #include "strings.h"
-#include <inttypes.h>
+#include <stdint.h>
 
 #define ASCII_BACKSPACE         8
 #define ASCII_DELETE            127
@@ -219,6 +219,23 @@ uint32_t asciiToHex(const char *s)
     }
 
     return hexValue;                                                                    // Return the computed hex value
+}
+
+/**
+*      @brief Function to determine length of given string
+*      @param s1 pointer to string
+*      @return uint32_t length of string
+**/
+uint32_t strlen(const char *s1)
+{
+    uint32_t len;
+
+    while (*s1 != '\0')     // Traverse string until Null character
+    {
+        len++;              // Increment length count
+    }
+
+    return len;             // Return length
 }
 
 /**

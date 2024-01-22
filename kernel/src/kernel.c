@@ -1,16 +1,9 @@
-// Kernel functions
-// J Losh
-
-//-----------------------------------------------------------------------------
-// Hardware Target
-//-----------------------------------------------------------------------------
-
-// Target uC:       TM4C123GH6PM
-// System Clock:    40 MHz
-
-//-----------------------------------------------------------------------------
-// Device includes, defines, and assembler directives
-//-----------------------------------------------------------------------------
+/**
+*      @file kernel.c
+*      @author Prithvi Bhat
+*      @brief Kernel functions
+*      @copyright Copyright (c) 2024
+**/
 
 #include <stdint.h>
 #include "tm4c123gh6pm.h"
@@ -20,6 +13,9 @@
 #include "strings.h"
 #include "systemRegisters.h"
 #include "shell.h"
+#include "nvic.h"
+#include "timer.h"
+#include "clock.h"
 
 #define     CURRENT_MUTEX       mutexes[tcb[taskCurrent].mutex]
 #define     FIRST_MUTEX         mutexes[0]
@@ -45,8 +41,8 @@
 #define     SETPRIORITY         0x17                // SVC number to update the priority of a thread
 #define     PRIORITY            0x18                // SVC number to update the priority inheritance state
 
-mutex mutexes[MAX_MUTEXES];                         // Instantiate mutex globally
-semaphore semaphores[MAX_SEMAPHORES];               // Instantiate mutex globally
+static mutex mutexes[MAX_MUTEXES];                  // Instantiate mutex globally
+static semaphore semaphores[MAX_SEMAPHORES];        // Instantiate mutex globally
 
 // task states
 #define STATE_INVALID           0                   // no task
@@ -125,32 +121,6 @@ bool initSemaphore(uint8_t semaphore, uint8_t count)
         semaphores[semaphore].count = count;
     }
     return ok;
-}
-
-/**
- *      @brief Initialisation for sysTicks
- **/
-void initSysTick(void)
-{
-    NVIC_ST_RELOAD_R = 39999;                   // sys_clock * 1 * 10^-3 for a 1ms tick
-    NVIC_ST_CURRENT_R = NVIC_ST_CURRENT_M;      // Clear current value by writing any value
-
-    NVIC_ST_CTRL_R |= NVIC_ST_CTRL_CLK_SRC;     // Enable system clock source for Systick operation
-    NVIC_ST_CTRL_R |= NVIC_ST_CTRL_INTEN;       // Enable systick interrupts
-    NVIC_ST_CTRL_R |= NVIC_ST_CTRL_ENABLE;      // Start systick
-}
-
-/**
-*      @brief Function to initialise timer module
-**/
-void initTimer(void)
-{
-    SYSCTL_RCGCWTIMER_R |= SYSCTL_RCGCWTIMER_R0;    // Enable and provide clock to the timer
-    _delay_cycles(3);                               // Delay for sync
-
-    WTIMER0_CTL_R       &= ~TIMER_CTL_TAEN;         // Disable timer before configuring
-    WTIMER0_CFG_R       = TIMER_CFG_32_BIT_TIMER;   // Select 32 bit wide counter
-    WTIMER0_TAMR_R      |= TIMER_TAMR_TACDIR;       // Direction = Up-counter
 }
 
 /**
@@ -421,7 +391,7 @@ void systickIsr(void)
         twoSecondLoad_g--;
     }
 
-    if (!twoSecondLoad_g)                              // One second has elapsed
+    if (!twoSecondLoad_g)                                   // One second has elapsed
     {
         twoSecondLoad_g = 2000;                             // Reload the value
         for (i = 0; i < taskCount; i++)
@@ -443,7 +413,7 @@ void systickIsr(void)
  **/
 __attribute__((naked)) void pendSvIsr(void)
 {
-    WTIMER0_CTL_R &= ~TIMER_CTL_TAEN;                       // Disable timer
+    STOP_TIMER;                                             // Disable timer
     __asm(" MRS     R0, PSP");                              // Load the PSP into a local register in the stack frame
     __asm(" STMDB   R0, {R4-R11, LR}");                     // Store registers R4-R11 and LR in the stack frame
 
@@ -486,8 +456,8 @@ __attribute__((naked)) void pendSvIsr(void)
             __asm(" MOVT R0, #0xFFFF");                     // Load the upper half-word
             __asm(" MOV LR, R0");                           // Move the value into the Link Register so the processor auto POP everything
 
-            WTIMER0_TAV_R = 0;
-            WTIMER0_CTL_R |= TIMER_CTL_TAEN;                // Enable timer before branching out to thread
+            RESET_TIMER;
+            RESTART_TIMER;                                  // Enable timer before branching out to thread
 
             __asm(" BX      LR");                           // Branch back
             break;
@@ -499,8 +469,8 @@ __attribute__((naked)) void pendSvIsr(void)
             __asm(" SUBS    R1, #0x24");                    // Go down 9 registers and pop from there
             __asm(" LDMIA   R1!, {R4-R11, LR}");            // Load registers R4-R11 from the stack
 
-            WTIMER0_TAV_R = 0;
-            WTIMER0_CTL_R |= TIMER_CTL_TAEN;                // Enable timer before branching out to thread
+            RESET_TIMER;
+            RESTART_TIMER;                                  // Enable timer before branching out to thread
 
             __asm(" BX      LR");                           // Branch back
             break;
@@ -734,7 +704,7 @@ void svCallIsr(void)
         case REBOOT:
         {
             putsUart0("Rebooting now\r\n");
-            NVIC_APINT_R = (NVIC_APINT_VECTKEY | NVIC_APINT_SYSRESETREQ);                   // Reset System
+            SYS_REBOOT;                                                                     // Reset System
             break;
         }
 
@@ -890,7 +860,7 @@ void svCallIsr(void)
 
                 for (j = 0; j < semaphores[i].queueSize; j++)
                 {
-                    semaphoreInfo[i].processQueue[j] = tcb[semaphores[i].processQueue[j]].pid;
+                    semaphoreInfo[i].processQueue[j] = (uint32_t)tcb[semaphores[i].processQueue[j]].pid;
                     strcpy(semaphoreInfo[i].processName[j], tcb[semaphores[i].processQueue[j]].name);
                 }
             }

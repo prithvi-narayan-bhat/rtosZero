@@ -9,7 +9,6 @@
 #include "commands.h"
 #include "gpio.h"
 #include "pinMappings.h"
-#include "systemRegisters.h"
 
 /**
  *      @brief Function to display the process (thread) status

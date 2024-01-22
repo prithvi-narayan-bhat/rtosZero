@@ -22,6 +22,7 @@
 #include <stdbool.h>
 #include "tm4c123gh6pm.h"
 #include "uart0.h"
+#include "wait.h"
 
 // PortA masks
 #define UART_TX_MASK 2

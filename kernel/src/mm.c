@@ -1,16 +1,10 @@
-// Memory manager functions
-// J Losh
-
-//-----------------------------------------------------------------------------
-// Hardware Target
-//-----------------------------------------------------------------------------
-
-// Target uC:       TM4C123GH6PM
-// System Clock:    40 MHz
-
-//-----------------------------------------------------------------------------
-// Device includes, defines, and assembler directives
-//-----------------------------------------------------------------------------
+/**
+*      @file mm.c
+*      @author Prithvi bhat
+*      @brief Memory management library
+*      @copyright Copyright (c) 2024
+*      @todo remove board dependencies
+**/
 
 #include <stdint.h>
 #include "tm4c123gh6pm.h"

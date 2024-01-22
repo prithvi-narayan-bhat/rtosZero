@@ -1,24 +1,8 @@
-// Shell functions
-// J Losh
-
-//-----------------------------------------------------------------------------
-// Hardware Target
-//-----------------------------------------------------------------------------
-
-// Target uC:       TM4C123GH6PM
-// System Clock:    40 MHz
-
-//-----------------------------------------------------------------------------
-// Device includes, defines, and assembler directives
-//-----------------------------------------------------------------------------
-
 #include <stdint.h>
-#include "tm4c123gh6pm.h"
 #include "faults.h"
-
-// User added
 #include "strings.h"
 #include "systemRegisters.h"
+#include "nvic.h"
 
 extern uint32_t pidExtern_g;
 

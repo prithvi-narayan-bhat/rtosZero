@@ -2,7 +2,7 @@
 #include "commands.h"
 #include "tm4c123gh6pm.h"
 #include "shell.h"
-#include "kernel.h"
+// #include "kernel.h"
 
 #define IS_COMMAND(string, count)       if(isCommand(&shellData, string, count))
 #define ASSERT(value)                   if(value >= 0)
@@ -147,7 +147,7 @@ void shell(void)
             {
                 uint32_t pid = (uint32_t)getFieldInteger(&shellData, 1);    // Get arguments
                 uint32_t priority = (uint32_t)getFieldInteger(&shellData, 2); // Get arguments
-                setThreadPriority((_fn)pid, priority);                      // Invoke function
+                setThreadPriority((void *)pid, priority);                      // Invoke function
                 putsUart0("\r\n\r\n");
                 yield();
             }
