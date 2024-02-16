@@ -874,7 +874,7 @@ void svCallIsr(void)
 
                 for (j = 0; j < mutexes[i].queueSize; j++)
                 {
-                    mutexInfo[i].processQueue[j] = tcb[mutexes[i].processQueue[j]].pid;
+                    mutexInfo[i].processQueue[j] = (uint32_t)tcb[mutexes[i].processQueue[j]].pid;
                     strcpy(mutexInfo[i].processName[j], tcb[mutexes[i].processQueue[j]].name);
                 }
             }

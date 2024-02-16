@@ -2,7 +2,7 @@
 #include "commands.h"
 #include "tm4c123gh6pm.h"
 #include "shell.h"
-// #include "kernel.h"
+#include "kernel.h"
 
 #define IS_COMMAND(string, count)       if(isCommand(&shellData, string, count))
 #define ASSERT(value)                   if(value >= 0)

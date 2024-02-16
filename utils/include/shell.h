@@ -14,9 +14,9 @@ typedef struct
     bool lock;
     uint16_t queueSize;
     uint32_t processQueue[2];
-    char *processName[2][10];
+    char processName[2][10];
     uint32_t lockedBy;
-    char *lockedByName[10];
+    char lockedByName[10];
 } mutexInfo_t;
 
 typedef struct
@@ -24,7 +24,7 @@ typedef struct
     uint16_t count;
     uint16_t queueSize;
     uint32_t processQueue[2];
-    char *processName[2][10];
+    char processName[2][10];
 } semaphoreInfo_t;
 
 void shell(void);

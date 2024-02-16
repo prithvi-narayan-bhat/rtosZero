@@ -14,5 +14,8 @@ add_library(UTILS_LIB ${UTILS_SRCS} ${UTILS_INC_DIR})           # Create library
 
 target_include_directories(UTILS_LIB PUBLIC ${UTILS_INC_DIR})   # Export headers
 
-target_link_libraries(UTILS_LIB PUBLIC BOARD_LIB)
+target_link_libraries(UTILS_LIB PUBLIC
+    BOARD_LIB
+    KERNEL_LIB
+    )
 # target_link_libraries(UTILS_LIB PUBLIC KERNEL_LIB)
