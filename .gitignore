@@ -58,3 +58,8 @@ Debug/
 .ccsproject
 .cproject
 targetConfigs/Tiva TM4C123GH6PM.ccxml
+
+# Build files
+build/
+*.swp
+tags
