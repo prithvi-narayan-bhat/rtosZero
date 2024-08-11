@@ -343,7 +343,7 @@ uint8_t getSubRegions(uint32_t baseAdd, uint32_t regionAdd, uint32_t size_in_byt
 }
 
 /**
- *      @brief Function ot generate the SRD mask for the requested task
+ *      @brief Function to generate the SRD mask for the requested task
  *              This depends on the memory allocation and is specific for each task
  *              Determine the region within SRAM where
  *              1.5K region @ 0x20001E00

@@ -27,7 +27,7 @@ stageMethod:
     MRS R1, CONTROL     ; Read the current CONTROL register value
     ORR R1, R1, #0x02   ; Set ASP bit in CONTROL register
     MSR CONTROL, R1     ; Load the new CONTROL register value
-    ISB                 ; Instruction sycn
+    ISB                 ; Instruction sync
     BX  LR              ; Return
 
 loadPSP:
@@ -58,8 +58,8 @@ enablePrivilegedMode:
 
 getSvcPriority:
     MRS R0, PSP         ; Load PSP into R0 to determine which function made the SV Call
-    LDR R0, [R0, #24]   ; Load return address of that function
-    LDRB R0, [R0, #-2]  ; Get the value of the argument from the location before the return address pointing to
+    LDR R0, [R0, #24]   ; Jump to the LR instruction (Stored as part of the hardware registers (Epilogue))
+    LDRB R0, [R0, #-2]  ; Read byte 2 spots before LR instruction [SCV_Opcode : SVC_Data : Trailing] = [2 : 1 : 1] = 4 (32 bytes)
     BX  LR              ; Return
 
 getArgs:
