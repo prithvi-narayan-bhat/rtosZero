@@ -142,8 +142,6 @@ bool toBool(char *string)
     toLower(string);
     if (!strcmp(string, "on"))          return true;
     else if (!strcmp(string, "off"))    return false;
-    else if (!strcmp(string, "prio"))   return true;
-    else if (!strcmp(string, "rr"))     return false;
     else                                return false;
 }
 

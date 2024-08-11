@@ -35,7 +35,11 @@ void shell(void)
             else IS_COMMAND("sched", 2)
             {
                 char *scheduleState = getFieldString(&shellData, 1);        // Get arguments
-                priority(toBool(scheduleState));                            // Invoke function
+
+                if (!strcmp(scheduleState, "p") || (!strcmp(scheduleState, "P")))         priority(SCHEDULER_PRIORITY);    // Invoke function
+                else if (!strcmp(scheduleState, "r") || !strcmp(scheduleState, "R"))    priority(SCHEDULER_ROUND_ROBIN); // Invoke function
+                else if (!strcmp(scheduleState, "i") || !strcmp(scheduleState, "I"))    priority(SCHEDULER_INTERVAL);    // Invoke function
+
                 putsUart0("\r\n\r\n");
                 yield();
             }
@@ -197,7 +201,7 @@ void shell(void)
                 putsUart0("\treboot     |\r\n");
                 putsUart0("\tipcs       |\r\n");
                 putsUart0("\tps         |\r\n");
-                putsUart0("\tsched      | [prio|rr]\r\n");
+                putsUart0("\tsched      | [p|r|i] (priority, round-robin, interval)\r\n");
                 putsUart0("\tpreempt    | [on|off]\r\n");
                 putsUart0("\tinheritance| [on|off]\r\n");
                 putsUart0("\tkill       | <pid>\r\n");

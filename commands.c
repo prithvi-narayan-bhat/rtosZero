@@ -68,7 +68,7 @@ void preempt(bool state)
 *      @brief Function to determine scheduling order
 *      @param state round robin or priority based
 **/
-void priority(bool state)
+void priority(uint8_t schedulerState)
 {
     __asm(" SVC #0x11");                                    // Trigger a Service call
 }

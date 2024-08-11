@@ -21,10 +21,10 @@
 #include "systemRegisters.h"
 #include "shell.h"
 
-#define     CURRENT_MUTEX       mutexes[tcb[taskCurrent].mutex]
+#define     CURRENT_MUTEX       mutexes[tcb[taskCurrent_g].mutex]
 #define     FIRST_MUTEX         mutexes[0]
 
-#define     CURRENT_SEMAPHORE   semaphores[tcb[taskCurrent].semaphore]
+#define     CURRENT_SEMAPHORE   semaphores[tcb[taskCurrent_g].semaphore]
 
 #define     YIELD               0x00                // SVC number for YIELD
 #define     SLEEP               0x01                // SVC number for sleep
@@ -37,7 +37,7 @@
 #define     REBOOT              0x08                // SVC number to reset the system
 #define     PS                  0x09                // SVC number for the PS command
 #define     SCHED               0x11                // SVC number to change scheduler mode
-#define     PREEMPT             0x12                // SVC number to change preemption mode
+#define     PREEMPT             0x12                // SVC number to change preemption_g mode
 #define     PID                 0x13                // SVC number to get PID from given string
 #define     PKILL               0x14                // SVC number to stop or kill a thread using it's name
 #define     RUN                 0x15                // SVC number to restart a thread using it's name
@@ -57,21 +57,21 @@ semaphore semaphores[MAX_SEMAPHORES];               // Instantiate mutex globall
 #define STATE_BLOCKED_MUTEX     5                   // has run, but now blocked by semaphore
 #define STATE_BLOCKED_SEMAPHORE 6                   // has run, but now blocked by semaphore
 
-// PS
+// Clocks
 uint8_t activeFillIndex_g = 0;
 uint16_t twoSecondLoad_g = 2000;
+uint64_t systemClock_g = 0x00;                      // Todo: Verify if valid
 
 // Faults
 uint32_t pidExtern_g = 0;
 
-// task
-uint8_t taskCurrent = 0;                            // index of last dispatched task
-uint8_t taskCount = 0;                              // total number of valid tasks
+// Tasks
+uint8_t taskCurrent_g = 0;                          // index of last dispatched task
+uint8_t taskCount_g = 0;                            // total number of valid tasks
 
-// control
-bool priorityScheduler = true;                      // priority (true) or round-robin (false)
-bool priorityInheritance = false;                   // priority inheritance for mutexes
-bool preemption = false;                            // preemption (true) or cooperative (false)
+uint8_t systemScheduler_g = SCHEDULER_PRIORITY;     // Default scheduler mode
+bool priorityInheritance_g = false;                 // priority inheritance for mutexes
+bool preemption_g = false;                          // preemption_g (true) or cooperative (false)
 
 // Task Control Block
 #define NUM_PRIORITIES   8
@@ -83,6 +83,8 @@ struct _tcb
     uint32_t ticks;                                 // ticks until sleep complete
     uint32_t scheduledCount;                        // To keep track of how many times the task was scheduled
     uint32_t runTime[2];                            // To hold the runTime values
+    uint32_t runInterval;
+    uint64_t startTime;
 
     uint8_t state;                                  // see STATE_ values above
     uint8_t priority;                               // 0=highest
@@ -163,7 +165,7 @@ void initRtos(void)
     initSysTick();                              // Initialise system ticks
     initTimer();                                // Initialise timer module
 
-    taskCount = 0;                              // No tasks running
+    taskCount_g = 0;                            // No tasks running
 
     for (i = 0; i < MAX_TASKS; i++)             // Clear out tcb records
     {
@@ -179,7 +181,7 @@ void initRtos(void)
 uint8_t rtosScheduler(void)
 {
     // Use priority scheduler
-    if (priorityScheduler)
+    if (systemScheduler_g == SCHEDULER_PRIORITY)
     {
         uint8_t currentHighestPriority = 0xFF;                                          // Arbitrarily high value
         uint8_t highestPriorityTask;
@@ -205,19 +207,38 @@ uint8_t rtosScheduler(void)
                 }
             }
         }
-        taskCurrent = highestPriorityTask;
+        taskCurrent_g = highestPriorityTask;
 
-        tcb[taskCurrent].scheduledCount++;                                              // Increment the schedule count
+        tcb[taskCurrent_g].scheduledCount++;                                            // Increment the schedule count
 
-        return taskCurrent;                                                             // Return the task to be updated
+        return taskCurrent_g;                                                           // Return the task to be updated
     }
 
-    // Use round-robin scheduler
-    else
+    // Use interval scehduler
+    else if (systemScheduler_g == SCHEDULER_INTERVAL)
     {
-        bool ok = false;
-        static uint8_t task = 0xFF;                                                     // Arbitrarily high value
+        uint8_t taskP;
+        
+        for (taskP = 0; taskP < MAX_TASKS; taskP++)                                     // Iterate through all tasks
+        {
+            if (((systemClock_g - tcb[taskP].startTime) >= tcb[taskP].runInterval) &&   // Calculate if interval right for scheduling
+                (tcb[taskP].state == STATE_READY) || (tcb[taskP].state == STATE_UNRUN)) // Check if the task to be scheduled is ready
+            {
+                taskCurrent_g = taskP;                                                  // Update the current task
+                tcb[taskCurrent_g].scheduledCount++;                                    // Increment the schedule count
 
+                tcb[taskCurrent_g].startTime = systemClock_g;                           // Update last scheduled time
+            }
+        }
+        return taskCurrent_g;                                                           // Return scheduled task    
+    }    
+    
+    // Use round-robin scheduler    
+    else if (systemScheduler_g == SCHEDULER_ROUND_ROBIN)    
+    {    
+        bool ok = false;    
+        static uint8_t task = 0xFF;                                                     // Arbitrarily high value
+   
         while (!ok)                                                                     // Iterate over all tasks starting from last task
         {
             task++;
@@ -225,11 +246,12 @@ uint8_t rtosScheduler(void)
             ok = (tcb[task].state == STATE_READY || tcb[task].state == STATE_UNRUN);    // Schedule READY or UNRUN task
         }
 
-        taskCurrent = task;                                                             // Update the current task
-        tcb[taskCurrent].scheduledCount++;                                              // Increment the schedule count
+        taskCurrent_g = task;                                                           // Update the current task
+        tcb[taskCurrent_g].scheduledCount++;                                            // Increment the schedule count
 
-        return taskCurrent;                                                             // Return the task count
+        return taskCurrent_g;                                                           // Return scheduled task
     }
+    return taskCurrent_g;                                                               // Return scheduled task    
 }
 
 /**
@@ -255,11 +277,11 @@ void startRtos(void)
     uint8_t task = rtosScheduler();         // Invoke RTOS scheduler
 
     void *taskPID = tcb[task].pid;          // Create a function to load the TMPL bit and start the task
-    pidExtern_g = (uint32_t)taskPID;          // Expose it to the outside world
+    pidExtern_g = (uint32_t)taskPID;        // Expose it to the outside world
     tcb[task].state = STATE_READY;          // Update the status of the thread
     fn = (_fn)taskPID;                      // Assign locally
 
-    applySrdRules(tcb[task].srd);           // Apply the SRD rules specific to the first thread
+    applySrdRules(tcb[task].srd);           // Apply the SRD rules specific to the thread
     stageMethod((uint32_t)tcb[task].sp);    // Load stack pointer onto PSP register and set ASP bit in Control register
 
     spawn(fn);                              // Invoke function to spawn method
@@ -279,7 +301,7 @@ bool createThread(_fn fn, const char name[], uint8_t priority, uint32_t stackByt
     bool ok = false, found = false;
     uint8_t i = 0;
 
-    if (taskCount < MAX_TASKS)
+    if (taskCount_g < MAX_TASKS)
     {
         // Ensure "fn" not already in list (prevent re-entrancy)
         while (!found && (i < MAX_TASKS))
@@ -305,10 +327,11 @@ bool createThread(_fn fn, const char name[], uint8_t priority, uint32_t stackByt
             tcb[i].currentPriority  = priority;                             // Store the requested PID
             tcb[i].runTime[0]   = 0;
             tcb[i].runTime[1]   = 0;
+            tcb[i].runInterval  = 100;                                      // By default all tasks will be scheduled once every 100ms
 
             generateSrdMasks(ptr, stackBytes, tcb[i].srd);                  // Store SRD masks in the TCB
 
-            taskCount++;                                                    // Increment record of task count
+            taskCount_g++;                                                  // Increment record of task count
             ok = true;
         }
     }
@@ -397,12 +420,12 @@ void post(int8_t semaphore)
 }
 
 /**
-*      @brief Function to decrement the tick count every 1ms
+*      @brief Function to decrement the tick count every 2ms
 **/
 void systickIsr(void)
 {
     uint8_t i;
-    for (i = 0; i < taskCount; i++)
+    for (i = 0; i < taskCount_g; i++)
     {
         if (tcb[i].state == STATE_DELAYED)                  // Decrement tick for threads marked "DELAYED"
         {
@@ -414,32 +437,47 @@ void systickIsr(void)
         }
     }
 
-    if (preemption)     enablePendSV();
+    if (preemption_g)     enablePendSV();
 
     if (twoSecondLoad_g)
     {
         twoSecondLoad_g--;
     }
 
-    if (!twoSecondLoad_g)                              // One second has elapsed
+    if (!twoSecondLoad_g)                                   // One second has elapsed
     {
         twoSecondLoad_g = 2000;                             // Reload the value
-        for (i = 0; i < taskCount; i++)
+        for (i = 0; i < taskCount_g; i++)
         {
             tcb[i].runTime[!activeFillIndex_g] = 0;         // Zero out the values before accumulating new ones
         }
         activeFillIndex_g = !activeFillIndex_g;             // Start saving time in the other index
     }
+    systemClock_g += 2;                                     // Increment system clock by 2 counts
 }
 
 /**
  *      @brief Function to handle context switching
- *              This is essentially an ISR and will be called automatically and performs the following:
- *              1. PUSH the status of the current context to the stack
- *              2. Request the scheduler for the next context to be executed
- *              3. Determine state of next context
- *              4. If state == STATE_UNRUN, follow same steps as in loading a new context
- *                  else POP the saved status of context from stack and load it
+ *          This is essentially an ISR and will be called automatically and performs the following:
+ *              1. Hardware automatically stores hardware registers R0-R3, R12, PC and LR( return location from the calling function)
+
+ *              2. Manually store software registers R4-R11, and LR(exception code)
+
+ *              3. Get new task from scheduler and apply SRD bits and mem rules and go to one of 4.a OR 4.b
+
+ *              4.a. Function state == STATE_UNRUN:
+ *                  create a dummy stack with the following:
+ *                      PC = (function pointer) (first instruction)
+ *                      xPSR = (thumb bit) (to indicate to except thumb style instructions)
+ *                      LR = (exception code) (floating or integer) (very important for hardware to determine how/what to pop)
+ *                      R0-R3 = Junk
+ *                  Load valid 0xFFFFFFFD into LR to indicate integer instruction
+ *                  BX LR from the last LR (..FFFD)
+
+ *              4.b. Function state == STATE_READY:
+ *                  pop existing saved stackframe in order from the bottom (R0-R3, R12, LR)
+ *                  PC now points to the next instruction to be executed
+ *                  BX LR from the popped LR which contains the exception code
  **/
 __attribute__((naked)) void pendSvIsr(void)
 {
@@ -447,31 +485,31 @@ __attribute__((naked)) void pendSvIsr(void)
     __asm(" MRS     R0, PSP");                              // Load the PSP into a local register in the stack frame
     __asm(" STMDB   R0, {R4-R11, LR}");                     // Store registers R4-R11 and LR in the stack frame
 
-    tcb[taskCurrent].sp = (void *)getPSP();                 // Store the PSP to the sp of the current task
-    tcb[taskCurrent].runTime[activeFillIndex_g] += WTIMER0_TAV_R;
+    tcb[taskCurrent_g].sp = (void *)getPSP();               // Store the PSP to the sp of the current task
+    tcb[taskCurrent_g].runTime[activeFillIndex_g] += WTIMER0_TAV_R;
 
     // Check if PendSV was invoked because of an MPU fault
     if ((getFaultFlags() && NVIC_FAULT_STAT_IERR) || (getFaultFlags() && NVIC_FAULT_STAT_DERR))
     {
-        tcb[taskCurrent].state = STATE_STOPPED;
+        tcb[taskCurrent_g].state = STATE_STOPPED;
     }
 
     rtosScheduler();                                        // Invoke RTOS scheduler, get next task
 
-    pidExtern_g = (uint32_t)tcb[taskCurrent].pid;
-    applySrdRules(tcb[taskCurrent].srd);                    // Apply the SRD rules specific to the first thread
-    loadPSP((uint32_t)tcb[taskCurrent].sp);                 // Load the new PSP and execute
+    pidExtern_g = (uint32_t)tcb[taskCurrent_g].pid;
+    applySrdRules(tcb[taskCurrent_g].srd);                  // Apply the SRD rules specific to the first thread
+    loadPSP((uint32_t)tcb[taskCurrent_g].sp);               // Load the new PSP and execute
 
-    switch (tcb[taskCurrent].state)
+    switch (tcb[taskCurrent_g].state)
     {
         case STATE_UNRUN:
         {
-            tcb[taskCurrent].state = STATE_READY;           // Update old state to be ready
+            tcb[taskCurrent_g].state = STATE_READY;         // Update old state to be ready
 
             // Create a stack frame to trick the processor into thinking this thread was previously run
-            uint32_t *psp = (uint32_t *)tcb[taskCurrent].sp; // Get the stack pointer
+            uint32_t *psp = (uint32_t *)tcb[taskCurrent_g].sp; // Get the stack pointer
             *(psp - 1) = 0x01000000;                        // Load the Thumb bit in the xPSR or things go south
-            *(psp - 2) = (uint32_t)tcb[taskCurrent].pid;    // Store PC
+            *(psp - 2) = (uint32_t)tcb[taskCurrent_g].pid;  // Store PC
             *(psp - 3) = 0xFFFFFFFD;                        // Store LR
             *(psp - 4) = 0xFFFFFFFF;                        // Store R12
             *(psp - 5) = 0xFFFFFFFF;                        // Store R3
@@ -531,8 +569,8 @@ void svCallIsr(void)
 
         case SLEEP:                                                                         // Cause function to sleep
         {
-            tcb[taskCurrent].state = STATE_DELAYED;                                         // Set state to Delayed in the Task Control Block
-            tcb[taskCurrent].ticks = getArgs();                                             // Get the Ticks from R0
+            tcb[taskCurrent_g].state = STATE_DELAYED;                                       // Set state to Delayed in the Task Control Block
+            tcb[taskCurrent_g].ticks = getArgs();                                           // Get the Ticks from R0
 
             enablePendSV();                                                                 // Enable PendSV to perform a context switch
 
@@ -541,26 +579,26 @@ void svCallIsr(void)
 
         case LOCK:
         {
-            tcb[taskCurrent].mutex = (uint8_t)getArgs();                                    // Get the mutex value
+            tcb[taskCurrent_g].mutex = (uint8_t)getArgs();                                  // Get the mutex value
 
             if (!CURRENT_MUTEX.lock)                                                        // Mutex is free
             {
-                CURRENT_MUTEX.lockedBy = taskCurrent;                                       // Say who's locking it
+                CURRENT_MUTEX.lockedBy = taskCurrent_g;                                     // Say who's locking it
                 CURRENT_MUTEX.lock = true;
             }
 
             // Priority Inheritance
-            else if (priorityInheritance && (tcb[CURRENT_MUTEX.lockedBy].currentPriority > tcb[taskCurrent].currentPriority))
+            else if (priorityInheritance_g && (tcb[CURRENT_MUTEX.lockedBy].currentPriority > tcb[taskCurrent_g].currentPriority))
             {
                 // Elevate priority of the task holding the resource to that of one requesting it
-                tcb[CURRENT_MUTEX.lockedBy].currentPriority = tcb[taskCurrent].currentPriority;
+                tcb[CURRENT_MUTEX.lockedBy].currentPriority = tcb[taskCurrent_g].currentPriority;
             }
 
             // Priority inheritance is disabled. Add process to queue
             else if (CURRENT_MUTEX.queueSize < MAX_MUTEX_QUEUE_SIZE)                        // Add task to queue only if mutex queue is empty
             {
-                CURRENT_MUTEX.processQueue[CURRENT_MUTEX.queueSize++] = taskCurrent;
-                tcb[taskCurrent].state = STATE_BLOCKED_MUTEX;                               // Set state to Delayed in the Task Control Block
+                CURRENT_MUTEX.processQueue[CURRENT_MUTEX.queueSize++] = taskCurrent_g;
+                tcb[taskCurrent_g].state = STATE_BLOCKED_MUTEX;                             // Set state to Delayed in the Task Control Block
             }
 
             enablePendSV();                                                                 // Enable PendSV to perform a context switch
@@ -570,9 +608,9 @@ void svCallIsr(void)
 
         case UNLOCK:
         {
-            tcb[taskCurrent].mutex = (uint8_t)getArgs();                                    // Get the mutex value
+            tcb[taskCurrent_g].mutex = (uint8_t)getArgs();                                    // Get the mutex value
 
-            if (CURRENT_MUTEX.lockedBy == taskCurrent)
+            if (CURRENT_MUTEX.lockedBy == taskCurrent_g)
             {
                 if (CURRENT_MUTEX.queueSize)                                                // Can have a max of 2 tasks in the queue
                 {
@@ -592,7 +630,7 @@ void svCallIsr(void)
                 }
 
                 // Revert to the original priority
-                if (priorityInheritance && tcb[CURRENT_MUTEX.lockedBy].currentPriority != tcb[CURRENT_MUTEX.lockedBy].priority)
+                if (priorityInheritance_g && tcb[CURRENT_MUTEX.lockedBy].currentPriority != tcb[CURRENT_MUTEX.lockedBy].priority)
                 {
                     tcb[CURRENT_MUTEX.lockedBy].currentPriority = tcb[CURRENT_MUTEX.lockedBy].priority;
                 }
@@ -603,7 +641,7 @@ void svCallIsr(void)
 
         case WAIT:
         {
-            tcb[taskCurrent].semaphore = (uint8_t)getArgs();                                // Get semaphore value
+            tcb[taskCurrent_g].semaphore = (uint8_t)getArgs();                                // Get semaphore value
 
             if (CURRENT_SEMAPHORE.count >= 1)                                               // If semaphore value is greater than zero, decrements
             {
@@ -614,7 +652,7 @@ void svCallIsr(void)
             {
                 for (i = 0; i < CURRENT_SEMAPHORE.queueSize; i++)
                 {
-                    if (CURRENT_SEMAPHORE.processQueue[i] == taskCurrent)                   // Process is already in queue
+                    if (CURRENT_SEMAPHORE.processQueue[i] == taskCurrent_g)                   // Process is already in queue
                     {
                         exists = true;                                                      // Set a flag and break
                         break;
@@ -622,8 +660,8 @@ void svCallIsr(void)
                 }
                 if (!exists)                                                                // Add to queue if doesn't exist
                 {
-                    CURRENT_SEMAPHORE.processQueue[CURRENT_SEMAPHORE.queueSize++] = taskCurrent;
-                    tcb[taskCurrent].state = STATE_BLOCKED_SEMAPHORE;                       // Set state to Delayed in the Task Control Block
+                    CURRENT_SEMAPHORE.processQueue[CURRENT_SEMAPHORE.queueSize++] = taskCurrent_g;
+                    tcb[taskCurrent_g].state = STATE_BLOCKED_SEMAPHORE;                       // Set state to Delayed in the Task Control Block
                 }
             }
 
@@ -634,7 +672,7 @@ void svCallIsr(void)
 
         case POST:
         {
-            tcb[taskCurrent].semaphore = (uint8_t)getArgs();                                // Get semaphore value
+            tcb[taskCurrent_g].semaphore = (uint8_t)getArgs();                                // Get semaphore value
 
             if (CURRENT_SEMAPHORE.queueSize)                                                // Someone is waiting the queue
             {
@@ -767,9 +805,11 @@ void svCallIsr(void)
 
         case SCHED:
         {
-            priorityScheduler = getArgs();
-            if (priorityScheduler)      putsUart0("Scheduler Mode: Priority\r\n");
-            else                        putsUart0("Scheduler Mode: Round-Robin\r\n");
+            systemScheduler_g = (uint8_t)getArgs();
+
+            if      (systemScheduler_g == SCHEDULER_PRIORITY)       putsUart0("Scheduler Mode: Priority\r\n");
+            else if (systemScheduler_g == SCHEDULER_ROUND_ROBIN)    putsUart0("Scheduler Mode: Round-Robin\r\n");
+            else if (systemScheduler_g == SCHEDULER_INTERVAL)       putsUart0("Scheduler Mode: Interval\r\n");
 
             enablePendSV();
 
@@ -778,9 +818,16 @@ void svCallIsr(void)
 
         case PREEMPT:
         {
-            preemption = getArgs();
-            if (priorityScheduler)      putsUart0("Preemption Mode: On\r\n");
-            else                        putsUart0("Preemption Mode: Off\r\n");
+            preemption_g = getArgs();
+            if (systemScheduler_g == SCHEDULER_PRIORITY ||
+                    systemScheduler_g == SCHEDULER_INTERVAL)
+            {
+                putsUart0("Preemption Mode: On\r\n");
+            }
+            else
+            {
+                putsUart0("Preemption Mode: Off\r\n");
+            }
 
             enablePendSV();
 
@@ -890,7 +937,7 @@ void svCallIsr(void)
 
                 for (j = 0; j < semaphores[i].queueSize; j++)
                 {
-                    semaphoreInfo[i].processQueue[j] = tcb[semaphores[i].processQueue[j]].pid;
+                    semaphoreInfo[i].processQueue[j] = (uint32_t)tcb[semaphores[i].processQueue[j]].pid;
                     strcpy(semaphoreInfo[i].processName[j], tcb[semaphores[i].processQueue[j]].name);
                 }
             }
@@ -904,7 +951,7 @@ void svCallIsr(void)
 
                 for (j = 0; j < mutexes[i].queueSize; j++)
                 {
-                    mutexInfo[i].processQueue[j] = tcb[mutexes[i].processQueue[j]].pid;
+                    mutexInfo[i].processQueue[j] = (uint32_t)tcb[mutexes[i].processQueue[j]].pid;
                     strcpy(mutexInfo[i].processName[j], tcb[mutexes[i].processQueue[j]].name);
                 }
             }
@@ -936,9 +983,9 @@ void svCallIsr(void)
 
         case PRIORITY:
         {
-            priorityInheritance = getArgs();
+            priorityInheritance_g = getArgs();
 
-            if (priorityInheritance)    putsUart0("Priority Inheritance mode: On\r\n");
+            if (priorityInheritance_g)    putsUart0("Priority Inheritance mode: On\r\n");
             else                        putsUart0("Priority Inheritance mode: Off\r\n");
 
             enablePendSV();

@@ -16,7 +16,7 @@ void ipcs(void *, void *);      // Function to display the inter-process (thread
 void kill(uint32_t pid);        // Function to kill the process (thread) with matching PID
 void Pkill(char *procName);     // Function to kill process (thread) with matching name
 void preempt(bool state);       // Function to toggle preemption state
-void priority(bool state);      // Function to determine scheduling order
+void priority(uint8_t state);   // Function to determine scheduling order
 void pidof(char *, void *);     // Function to display the PID of given process
 void run(char *procName);       // Function to run selected program in the background
 void reboot(void);              // Function to reset the system

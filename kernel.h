@@ -55,6 +55,12 @@ semaphore semaphores[MAX_SEMAPHORES];
 // tasks
 #define MAX_TASKS 12
 
+// Scheduler
+#define SCHEDULER_PRIORITY      0x01   // Will schedule tasks with highest priority
+#define SCHEDULER_ROUND_ROBIN   0x02   // Will schedule tasks in an orderly fashion
+#define SCHEDULER_INTERVAL      0x03   // Will schedule tasks once every specified amount of time (100ms)
+
+
 //-----------------------------------------------------------------------------
 // Subroutines
 //-----------------------------------------------------------------------------
