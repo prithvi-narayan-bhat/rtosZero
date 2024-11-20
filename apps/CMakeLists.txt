@@ -16,7 +16,26 @@ target_include_directories(APPS_LIB PUBLIC          # Export headers
     ${APPS_INC_DIR}
 )
 
-target_link_libraries(APPS_LIB PUBLIC
+target_link_libraries(APPS_LIB PUBLIC               # Export
+    BOARD_LIB
+    KERNEL_LIB
+)
+
+add_executable(tasks                                # Set executable
+    ${APPS_SRC_DIR}/tasks.c
+)
+
+# Set executable output directory
+set_target_properties(tasks
+    PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/deploy
+)
+
+include_directories(                                # Set includes
+    ${APPS_INC_DIR}
+)
+
+target_link_libraries(tasks                         # Set linked libraries
     BOARD_LIB
     KERNEL_LIB
 )

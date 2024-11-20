@@ -6,7 +6,7 @@ if(DEFINED BOARD_TYPE)
     message("Target Board: ${BOARD_TYPE}")
     add_definitions(-DBOARD_TYPE=${BOARD_TYPE})
 else()
-    message(FATAL_ERROR "Please specify the board type using -DBOARD_TYPE=<your_board_type>")
+    message(FATAL_ERROR "Please specify the board type using -DBOARD_TYPE=<your_board_type> [tm4c123gh6pm]")
 endif()
 
 # Set compiler and linker
@@ -27,5 +27,3 @@ add_subdirectory(boards)
 add_subdirectory(kernel)
 add_subdirectory(os)
 add_subdirectory(apps)
-
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)     # Set the output directory for executables
